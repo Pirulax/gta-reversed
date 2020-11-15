@@ -45,6 +45,8 @@ public:
     // Array of update time history with the last item being from before the most recent frame
     static UpdateTimeHistory_t& m_UpdateTimeMsHistory;
 
+    static void InjectHooks();
+
     // class functions
 
     static void Initialise();

@@ -8,7 +8,7 @@ Do not delete this comment block. Respect others' work!
 
 CTimer::TimerFunction_t& CTimer::ms_fnTimerFunction = *(TimerFunction_t*)0xB7CB28;
 
-bool& CTimer::ms_bEnableTimeDebug = *(bool*)0x7CB40;
+bool& CTimer::ms_bEnableTimeDebug = *(bool*)0xB7CB40;
 bool& CTimer::ms_bSkipProcessThisFrame = *(bool*)0xB7CB89;
 bool& CTimer::ms_bSlowMotionActive = *(bool*)0xB7CB88;
 float& CTimer::ms_fGameFPS = *(float*)0xB7CB50;
@@ -35,6 +35,12 @@ CTimer::UpdateTimeHistory_t& CTimer::m_UpdateTimeMsHistory = *(UpdateTimeHistory
 float& CTimer::ms_fOldTimeStep = *(float*)0xB7CB54;
 float& CTimer::ms_fSlowMotionScale = *(float*)0xB7CB60;
 
+void CTimer::InjectHooks()
+{
+    std::cout << "CTimer::InjectHooks";
+    HookInstall(0x561B10, &Update);
+}
+
 void CTimer::Initialise()
 {
     ((void(__cdecl *)()) 0x5617E0)();
@@ -45,6 +51,7 @@ void CTimer::Shutdown()
     ((void(__cdecl *)()) 0x5618C0)();
 }
 
+// Also called GetRealTimeScale in some idbs
 void CTimer::UpdateVariables(float timeStep)
 {
     ((void(__cdecl *)(float)) 0x5618D0)(timeStep);
@@ -97,9 +104,36 @@ void CTimer::EndUserPause()
 
 void CTimer::Update()
 {
+#ifdef USE_DEFAULT_FUNCTIONS
     ((void(__cdecl *)()) 0x561B10)();
-}
+#else
+    if (!ms_fnTimerFunction)
+        return;
 
+    ms_bEnableTimeDebug = true;
+    ms_fGameFPS = float(1000.0 / (m_snTimeInMillisecondsNonClipped - ms_nPreviousTimeInMillisecondsNonClipped));
+
+    // Update history
+    std::rotate(m_UpdateTimeMsHistory.begin(), m_UpdateTimeMsHistory.begin() + 1, m_UpdateTimeMsHistory.end()); // Shift to left
+    m_UpdateTimeMsHistory.back() = m_snTimeInMilliseconds; // Set last frame's time
+
+    ms_nPreviousTimeInMillisecondsNonClipped = m_snTimeInMillisecondsNonClipped;
+
+    const auto nRenderTimeBefore = m_snRenderStartTime;
+    m_snRenderStartTime = ms_fnTimerFunction();
+
+    auto fTimeDelta = float(m_snRenderStartTime - nRenderTimeBefore);
+
+    const bool bPaused = m_CodePause || m_UserPause;
+    if (!bPaused)
+        fTimeDelta *= ms_fTimeScale;
+
+    m_snTimeInMillisecondsPauseMode += unsigned int(fTimeDelta / ms_nTimerDivider);
+
+    UpdateVariables(bPaused ? 0.0f : fTimeDelta);
+    m_FrameCounter++;
+#endif
+}
 
 void CTimer::UpdateTimeStep(float fTimeStep)
 {
