@@ -25,6 +25,7 @@ public:
     static bool& m_UserPause;
     static float& ms_fTimeStepNonClipped;
     static float& ms_fTimeStep;
+    static unsigned int& ms_nTimerDivider;
 
     static float& ms_fOldTimeStep;
     static float& ms_fSlowMotionScale;
