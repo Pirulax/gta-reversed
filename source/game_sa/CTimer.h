@@ -36,6 +36,7 @@ public:
     static unsigned int& m_snTimeInMillisecondsPauseMode;
     static unsigned int& m_snTimeInMillisecondsNonClipped;
     static unsigned int& m_snTimeInMilliseconds;
+    static std::uint64_t& m_snRenderStartTime;
 
     // Array of update time history with the last item being from before the most recent frame
     static UpdateTimeHistory_t& m_UpdateTimeMsHistory;

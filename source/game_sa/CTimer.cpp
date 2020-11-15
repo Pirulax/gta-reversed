@@ -18,6 +18,7 @@ float& CTimer::ms_fTimeScale = *(float*)0xB7CB64;
 unsigned int& CTimer::m_snTimeInMillisecondsPauseMode = *(unsigned int*)0xB7CB7C;
 unsigned int& CTimer::m_snTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB80;
 unsigned int& CTimer::m_snTimeInMilliseconds = *(unsigned int*)0xB7CB84;
+std::uint64_t& CTimer::m_snRenderStartTime = *(std::uint64_t*)0xB7CB38;
 
 CTimer::UpdateTimeHistory_t& CTimer::m_UpdateTimeMsHistory = *(UpdateTimeHistory_t*)0xB7CB6C;
 
