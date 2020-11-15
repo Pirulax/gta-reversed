@@ -16,15 +16,13 @@ unsigned int& CTimer::m_FrameCounter = *(unsigned int*)0xB7CB4C;
 float& CTimer::ms_fTimeStepNonClipped = *(float*)0xB7CB58;
 float& CTimer::ms_fTimeStep = *(float*)0xB7CB5C;
 float& CTimer::ms_fTimeScale = *(float*)0xB7CB64;
-unsigned int& CTimer::m_snPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB78;
+
 unsigned int& CTimer::m_snTimeInMillisecondsPauseMode = *(unsigned int*)0xB7CB7C;
 unsigned int& CTimer::m_snTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB80;
 unsigned int& CTimer::m_snTimeInMilliseconds = *(unsigned int*)0xB7CB84;
 
-unsigned int& CTimer::m_snPPPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB6C;
-unsigned int& CTimer::m_snPPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB70;
-unsigned int& CTimer::m_snPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB74;
-unsigned int& CTimer::m_snPreviousTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB68;
+CTimer::UpdateTimeHistory_t& CTimer::m_UpdateTimeMsHistory = *(UpdateTimeHistory_t*)0xB7CB6C;
+
 float& CTimer::ms_fOldTimeStep = *(float*)0xB7CB54;
 float& CTimer::ms_fSlowMotionScale = *(float*)0xB7CB60;
 

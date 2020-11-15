@@ -7,10 +7,13 @@ Do not delete this comment block. Respect others' work!
 #pragma once
 
 #include "PluginBase.h"
+#include <array>
 
 class PLUGIN_API CTimer
 {
 public:
+    using UpdateTimeHistory_t = std::array<unsigned int, 4>;
+
     // class variables
     static bool& bSkipProcessThisFrame;
     static bool& bSlowMotionActive;
@@ -22,19 +25,17 @@ public:
     static float& ms_fTimeStepNonClipped;
     static float& ms_fTimeStep;
 
-    static unsigned int& m_snPPPPreviousTimeInMilliseconds;
-    static unsigned int& m_snPPPreviousTimeInMilliseconds;
-    static unsigned int& m_snPPreviousTimeInMilliseconds;
-    static unsigned int& m_snPreviousTimeInMillisecondsNonClipped;
     static float& ms_fOldTimeStep;
     static float& ms_fSlowMotionScale;
 
     // game speed
     static float& ms_fTimeScale;
-    static unsigned int& m_snPreviousTimeInMilliseconds;
     static unsigned int& m_snTimeInMillisecondsPauseMode;
     static unsigned int& m_snTimeInMillisecondsNonClipped;
     static unsigned int& m_snTimeInMilliseconds;
+
+    // Array of update time history with the last item being from before the most recent frame
+    static UpdateTimeHistory_t& m_UpdateTimeMsHistory;
 
     // class functions
 
