@@ -19,10 +19,14 @@ public:
 
     // class variables
     static bool& ms_bEnableTimeDebug;
+    static bool& ms_bSkipProcessThisFrame;
+    static bool& ms_bSlowMotionActive;
+    static float& ms_fGameFPS;
 
     static bool& m_CodePause;
-    static unsigned int& m_FrameCounter;
     static bool& m_UserPause;
+    static unsigned int& m_FrameCounter;
+    static unsigned int& ms_nRenderTimerPauseCount;
     static float& ms_fTimeStepNonClipped;
     static float& ms_fTimeStep;
     static unsigned int& ms_nTimerDivider;
@@ -34,6 +38,7 @@ public:
     static float& ms_fTimeScale;
     static unsigned int& m_snTimeInMillisecondsPauseMode;
     static unsigned int& m_snTimeInMillisecondsNonClipped;
+    static unsigned int& ms_nPreviousTimeInMillisecondsNonClipped;
     static unsigned int& m_snTimeInMilliseconds;
     static std::uint64_t& m_snRenderStartTime;
 

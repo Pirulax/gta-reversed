@@ -9,9 +9,15 @@ Do not delete this comment block. Respect others' work!
 CTimer::TimerFunction_t& CTimer::ms_fnTimerFunction = *(TimerFunction_t*)0xB7CB28;
 
 bool& CTimer::ms_bEnableTimeDebug = *(bool*)0x7CB40;
+bool& CTimer::ms_bSkipProcessThisFrame = *(bool*)0xB7CB89;
+bool& CTimer::ms_bSlowMotionActive = *(bool*)0xB7CB88;
+float& CTimer::ms_fGameFPS = *(float*)0xB7CB50;
+
 bool& CTimer::m_CodePause = *(bool*)0xB7CB48;
 bool& CTimer::m_UserPause = *(bool*)0xB7CB49;
+
 unsigned int& CTimer::m_FrameCounter = *(unsigned int*)0xB7CB4C;
+unsigned int& CTimer::ms_nRenderTimerPauseCount = *(unsigned int*)0xB7CB44;
 unsigned int& CTimer::ms_nTimerDivider = *(unsigned int*)0xB7CB2C;
 
 float& CTimer::ms_fTimeStepNonClipped = *(float*)0xB7CB58;
@@ -21,6 +27,7 @@ float& CTimer::ms_fTimeScale = *(float*)0xB7CB64;
 unsigned int& CTimer::m_snTimeInMillisecondsPauseMode = *(unsigned int*)0xB7CB7C;
 unsigned int& CTimer::m_snTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB80;
 unsigned int& CTimer::m_snTimeInMilliseconds = *(unsigned int*)0xB7CB84;
+unsigned int& CTimer::ms_nPreviousTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB68;
 std::uint64_t& CTimer::m_snRenderStartTime = *(std::uint64_t*)0xB7CB38;
 
 CTimer::UpdateTimeHistory_t& CTimer::m_UpdateTimeMsHistory = *(UpdateTimeHistory_t*)0xB7CB6C;
