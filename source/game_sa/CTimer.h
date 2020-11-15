@@ -14,6 +14,9 @@ class PLUGIN_API CTimer
 public:
     using UpdateTimeHistory_t = std::array<unsigned int, 4>;
 
+    typedef std::uint64_t(__cdecl* TimerFunction_t)();
+    static TimerFunction_t& ms_fnTimerFunction;
+
     // class variables
     static bool& bSkipProcessThisFrame;
     static bool& bSlowMotionActive;

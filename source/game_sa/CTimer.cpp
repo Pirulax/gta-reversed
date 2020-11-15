@@ -6,9 +6,7 @@ Do not delete this comment block. Respect others' work!
 */
 #include "StdInc.h"
 
-bool& CTimer::bSkipProcessThisFrame = *(bool*)0xB7CB89;
-bool& CTimer::bSlowMotionActive = *(bool*)0xB7CB88;
-float& CTimer::game_FPS = *(float*)0xB7CB50;
+CTimer::TimerFunction_t& CTimer::ms_fnTimerFunction = *(TimerFunction_t*)0xB7CB28;
 
 bool& CTimer::m_CodePause = *(bool*)0xB7CB48;
 bool& CTimer::m_UserPause = *(bool*)0xB7CB49;
