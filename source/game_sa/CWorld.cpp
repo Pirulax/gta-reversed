@@ -33,6 +33,11 @@ unsigned int &FilledColPointIndex = *(unsigned int*)0xB7CD7C;
 CColPoint *gaTempSphereColPoints = (CColPoint *)0xB9B250;
 short &TAG_SPRAYING_INCREMENT_VAL = *(short *)0x8CDEF0;
 
+void CWorld::InjectHooks() {
+    HookInstall(0x565CB0, RemoveFallenPeds);
+    HookInstall(0x565E80, RemoveFallenCars);
+}
+
 // Converted from cdecl void CWorld::ResetLineTestOptions(void) 0x5631C0
 void CWorld::ResetLineTestOptions() {
     plugin::Call<0x5631C0>();
