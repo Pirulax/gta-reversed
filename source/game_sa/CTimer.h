@@ -18,7 +18,7 @@ public:
     static bool& ms_bEnableTimeDebug;
     static bool& ms_bSkipProcessThisFrame;
     static bool& ms_bSlowMotionActive;
-    static float& ms_fGameFPS;
+    static float& game_FPS;
 
     static bool& m_CodePause;
     static bool& m_UserPause;
