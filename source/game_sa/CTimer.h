@@ -15,7 +15,7 @@ public:
     static TimerFunction_t& ms_fnTimerFunction;
 
     // class variables
-    static bool& ms_bEnableTimeDebug;
+    static bool& m_sbEnableTimeDebug;
     static bool& bSkipProcessThisFrame;
     static bool& bSlowMotionActive;
     static float& game_FPS;

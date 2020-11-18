@@ -8,7 +8,7 @@ Do not delete this comment block. Respect others' work!
 
 CTimer::TimerFunction_t& CTimer::ms_fnTimerFunction = *(TimerFunction_t*)0xB7CB28;
 
-bool& CTimer::ms_bEnableTimeDebug = *(bool*)0xB7CB40;
+bool& CTimer::m_sbEnableTimeDebug = *(bool*)0xB7CB40;
 bool& CTimer::bSkipProcessThisFrame = *(bool*)0xB7CB89;
 bool& CTimer::bSlowMotionActive = *(bool*)0xB7CB88;
 float& CTimer::game_FPS = *(float*)0xB7CB50;
@@ -111,7 +111,7 @@ void CTimer::Update()
     if (!ms_fnTimerFunction)
         return;
 
-    ms_bEnableTimeDebug = true;
+    m_sbEnableTimeDebug = true;
     game_FPS = float(1000.0 / (m_snTimeInMillisecondsNonClipped - ms_nPreviousTimeInMillisecondsNonClipped));
 
     // Update history
