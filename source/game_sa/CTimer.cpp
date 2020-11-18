@@ -114,7 +114,7 @@ void CTimer::Update()
         return;
 
     ms_bEnableTimeDebug = true;
-    ms_fGameFPS = float(1000.0 / (m_snTimeInMillisecondsNonClipped - ms_nPreviousTimeInMillisecondsNonClipped));
+    game_FPS = float(1000.0 / (m_snTimeInMillisecondsNonClipped - ms_nPreviousTimeInMillisecondsNonClipped));
 
     // Update history
     m_snPPPPreviousTimeInMilliseconds = m_snPPPreviousTimeInMilliseconds;

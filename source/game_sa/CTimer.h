@@ -48,7 +48,6 @@ public:
     static void InjectHooks();
 
     // class functions
-
     static void Initialise();
     static void Shutdown();
     static void UpdateVariables(float timeStep);
