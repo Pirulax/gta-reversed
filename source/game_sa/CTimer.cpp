@@ -30,7 +30,10 @@ unsigned int& CTimer::m_snTimeInMilliseconds = *(unsigned int*)0xB7CB84;
 unsigned int& CTimer::ms_nPreviousTimeInMillisecondsNonClipped = *(unsigned int*)0xB7CB68;
 std::uint64_t& CTimer::m_snRenderStartTime = *(std::uint64_t*)0xB7CB38;
 
-CTimer::UpdateTimeHistory_t& CTimer::m_UpdateTimeMsHistory = *(UpdateTimeHistory_t*)0xB7CB6C;
+unsigned int& CTimer::m_snPPPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB78;
+unsigned int& CTimer::m_snPPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB74;
+unsigned int& CTimer::m_snPPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB70;
+unsigned int& CTimer::m_snPreviousTimeInMilliseconds = *(unsigned int*)0xB7CB6C;
 
 float& CTimer::ms_fOldTimeStep = *(float*)0xB7CB54;
 float& CTimer::ms_fSlowMotionScale = *(float*)0xB7CB60;
@@ -114,8 +117,10 @@ void CTimer::Update()
     ms_fGameFPS = float(1000.0 / (m_snTimeInMillisecondsNonClipped - ms_nPreviousTimeInMillisecondsNonClipped));
 
     // Update history
-    std::rotate(m_UpdateTimeMsHistory.begin(), m_UpdateTimeMsHistory.begin() + 1, m_UpdateTimeMsHistory.end()); // Shift to left
-    m_UpdateTimeMsHistory.back() = m_snTimeInMilliseconds; // Set last frame's time
+    m_snPPPPreviousTimeInMilliseconds = m_snPPPreviousTimeInMilliseconds;
+    m_snPPPreviousTimeInMilliseconds = m_snPPreviousTimeInMilliseconds;
+    m_snPPreviousTimeInMilliseconds = m_snPreviousTimeInMilliseconds;
+    m_snPreviousTimeInMilliseconds = m_snTimeInMilliseconds;
 
     ms_nPreviousTimeInMillisecondsNonClipped = m_snTimeInMillisecondsNonClipped;
 

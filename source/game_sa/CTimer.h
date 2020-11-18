@@ -7,13 +7,10 @@ Do not delete this comment block. Respect others' work!
 #pragma once
 
 #include "PluginBase.h"
-#include <array>
 
 class PLUGIN_API CTimer
 {
 public:
-    using UpdateTimeHistory_t = std::array<unsigned int, 4>;
-
     typedef std::uint64_t(__cdecl* TimerFunction_t)();
     static TimerFunction_t& ms_fnTimerFunction;
 
@@ -42,8 +39,11 @@ public:
     static unsigned int& m_snTimeInMilliseconds;
     static std::uint64_t& m_snRenderStartTime;
 
-    // Array of update time history with the last item being from before the most recent frame
-    static UpdateTimeHistory_t& m_UpdateTimeMsHistory;
+    // Freshly from R*:
+    static unsigned int& m_snPPPPreviousTimeInMilliseconds;
+    static unsigned int& m_snPPPreviousTimeInMilliseconds;
+    static unsigned int& m_snPPreviousTimeInMilliseconds;
+    static unsigned int& m_snPreviousTimeInMilliseconds;
 
     static void InjectHooks();
 
