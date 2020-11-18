@@ -40,7 +40,6 @@ float& CTimer::ms_fSlowMotionScale = *(float*)0xB7CB60;
 
 void CTimer::InjectHooks()
 {
-    std::cout << "CTimer::InjectHooks";
     HookInstall(0x561B10, &Update);
 }
 
