@@ -23,7 +23,6 @@ public:
     static bool& m_CodePause;
     static bool& m_UserPause;
     static unsigned int& m_FrameCounter;
-    static unsigned int& ms_nRenderTimerPauseCount;
     static float& ms_fTimeStepNonClipped;
     static float& ms_fTimeStep;
     static unsigned int& ms_nTimerDivider;

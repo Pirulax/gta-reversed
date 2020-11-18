@@ -17,7 +17,6 @@ bool& CTimer::m_CodePause = *(bool*)0xB7CB48;
 bool& CTimer::m_UserPause = *(bool*)0xB7CB49;
 
 unsigned int& CTimer::m_FrameCounter = *(unsigned int*)0xB7CB4C;
-unsigned int& CTimer::ms_nRenderTimerPauseCount = *(unsigned int*)0xB7CB44;
 unsigned int& CTimer::ms_nTimerDivider = *(unsigned int*)0xB7CB2C;
 
 float& CTimer::ms_fTimeStepNonClipped = *(float*)0xB7CB58;
