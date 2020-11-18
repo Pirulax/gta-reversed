@@ -10,7 +10,7 @@ CTimer::TimerFunction_t& CTimer::ms_fnTimerFunction = *(TimerFunction_t*)0xB7CB2
 
 bool& CTimer::ms_bEnableTimeDebug = *(bool*)0xB7CB40;
 bool& CTimer::bSkipProcessThisFrame = *(bool*)0xB7CB89;
-bool& CTimer::ms_bSlowMotionActive = *(bool*)0xB7CB88;
+bool& CTimer::bSlowMotionActive = *(bool*)0xB7CB88;
 float& CTimer::game_FPS = *(float*)0xB7CB50;
 
 bool& CTimer::m_CodePause = *(bool*)0xB7CB48;

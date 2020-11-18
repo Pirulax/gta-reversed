@@ -17,7 +17,7 @@ public:
     // class variables
     static bool& ms_bEnableTimeDebug;
     static bool& bSkipProcessThisFrame;
-    static bool& ms_bSlowMotionActive;
+    static bool& bSlowMotionActive;
     static float& game_FPS;
 
     static bool& m_CodePause;
