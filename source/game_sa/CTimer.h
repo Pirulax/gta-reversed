@@ -25,7 +25,7 @@ public:
     static unsigned int& m_FrameCounter;
     static float& ms_fTimeStepNonClipped;
     static float& ms_fTimeStep;
-    static unsigned int& ms_nTimerDivider;
+    static unsigned int& m_snTimerDivider;
 
     static float& ms_fOldTimeStep;
     static float& ms_fSlowMotionScale;
