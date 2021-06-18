@@ -15,6 +15,7 @@ public:
     static TimerFunction_t& ms_fnTimerFunction;
 
     // class variables
+    static unsigned int& renderTimerPauseCount;
     static bool& m_sbEnableTimeDebug;
     static bool& bSkipProcessThisFrame;
     static bool& bSlowMotionActive;
@@ -37,6 +38,7 @@ public:
     static unsigned int& ms_nPreviousTimeInMillisecondsNonClipped;
     static unsigned int& m_snTimeInMilliseconds;
     static std::uint64_t& m_snRenderStartTime;
+    static std::uint64_t& renderTimerPauseTime;
 
     // Freshly from R*:
     static unsigned int& m_snPPPPreviousTimeInMilliseconds;
@@ -51,7 +53,7 @@ public:
     static void Shutdown();
     static void UpdateVariables(float timeStep);
     static void Suspend();
-    static void Resume();
+    static bool Resume();
     static int GetCyclesPerMillisecond();
     // cycles per ms * 20
     static int GetCyclesPerFrame();
