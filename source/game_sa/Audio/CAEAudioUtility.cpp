@@ -23,9 +23,9 @@ void CAEAudioUtility::InjectHooks()
 }
 
 // 0x4d9c10
-std::int32_t CAEAudioUtility::GetRandomNumberInRange(std::int32_t a, std::int32_t b)
+std::int32_t CAEAudioUtility::GetRandomNumberInRange(std::int32_t min, std::int32_t max)
 {
-    return CGeneral::GetRandomNumberInRange(a, b);
+    return min + static_cast<int>(rand() * RAND_MAX_RECIPROCAL * (max - min + 1));
 }
 
 // 0x4d9c50
