@@ -25,8 +25,8 @@ void CAEAudioUtility::InjectHooks()
 // 0x4d9c10
 std::int32_t CAEAudioUtility::GetRandomNumberInRange(std::int32_t min, std::int32_t max)
 {
-    // This and CGeneral differs in that this function returns a number [min, max], while
-    // the other [min, max). To solve this we do `max + 1`
+    // This and CGeneral differs in that this function returns a number [min, max + 1], while
+    // the other [min, max]. To solve this we do `max + 1`
     return CGeneral::GetRandomNumberInRange(min, max + 1);
 }
 
