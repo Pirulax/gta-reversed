@@ -279,32 +279,39 @@ void CTimeCycle::CalcColoursForPoint(CVector point, CColourSet* set) {
         CColourSet currentNew(currSampleIdx, CWeather::NewWeatherType);
         CColourSet nextNew(nextSampleIdx,   CWeather::NewWeatherType);
 
-        if (CWeather::OldWeatherType == WEATHER_EXTRASUNNY_SMOG_LA) {
+        switch (CWeather::OldWeatherType) {
+        case WEATHER_EXTRASUNNY_SMOG_LA: {
             CColourSet set1(currSampleIdx, WEATHER_EXTRASUNNY_LA);
             currentOld.Interpolate(&currentOld, &set1, 1.0f - f, f, false);
 
             CColourSet set2(nextSampleIdx, WEATHER_EXTRASUNNY_LA);
             nextOld.Interpolate(&nextOld, &set2, 1.0f - f, f, false);
-        } else if (CWeather::OldWeatherType == WEATHER_SUNNY_SMOG_LA) {
+            break;
+        }
+        case WEATHER_SUNNY_SMOG_LA: {
             CColourSet set1(currSampleIdx, WEATHER_SUNNY_LA);
             currentOld.Interpolate(&currentOld, &set1, 1.0f - f, f, false);
 
             CColourSet set2(nextSampleIdx, WEATHER_SUNNY_LA);
             nextOld.Interpolate(&nextOld, &set2, 1.0f - f, f, false);
+            break;
+        }
         }
 
-        if (CWeather::NewWeatherType == WEATHER_EXTRASUNNY_SMOG_LA) {
+        switch (CWeather::NewWeatherType) {
+        case WEATHER_EXTRASUNNY_SMOG_LA: {
             CColourSet set1(currSampleIdx, WEATHER_EXTRASUNNY_LA);
             currentNew.Interpolate(&currentNew, &set1, 1.0f - f, f, false);
 
             CColourSet set2(nextSampleIdx, WEATHER_EXTRASUNNY_LA);
             nextNew.Interpolate(&nextNew, &set2, 1.0f - f, f, false);
-        } else if (CWeather::NewWeatherType == WEATHER_SUNNY_SMOG_LA) {
+        case WEATHER_SUNNY_SMOG_LA: {
             CColourSet set1(currSampleIdx, WEATHER_SUNNY_LA);
             currentNew.Interpolate(&currentNew, &set1, 1.0f - f, f, false);
 
             CColourSet set2(nextSampleIdx, WEATHER_SUNNY_LA);
             nextNew.Interpolate(&nextNew, &set2, 1.0f - f, f, false);
+        }
         }
 
         { // 0x560877
