@@ -394,7 +394,7 @@ void CAEPedAudioEntity::HandleLandingEvent(eAudioEvents event) {
 
     const auto PlayLandingSound = [&](eSoundBankSlot slot, eSoundID soundID, float volume, int16 playPos) {
         AESoundManager.PlaySound({
-            .BankSlotID = slot,
+            .BankSlotID         = slot,
             .SoundID            = soundID,
             .AudioEntity        = this,
             .Pos                = m_pPed->GetPosition(),
@@ -428,8 +428,9 @@ void CAEPedAudioEntity::HandleLandingEvent(eAudioEvents event) {
 }
 
 // 0x4E1A40
-void CAEPedAudioEntity::HandlePedSwing(eAudioEvents event, int32 a3, uint32 volume) {
-    plugin::CallMethod<0x4E1A40, CAEPedAudioEntity*, int32, int32, uint32>(this, event, a3, volume);
+void CAEPedAudioEntity::HandlePedSwing(eAudioEvents event, eAudioEvents secondaryEvent, uint32 playDelayMs) {
+    const auto* const wi = &m_pPed->GetActiveWeapon().GetWeaponInfo();
+    if (!AESoundManager.EnsureSoundBankIsLoaded(SND_BANK_GENRL_WEAPONS, SND_BANK_SLOT_WEAPON_GEN))
 }
 
 // 0x4E1CC0
