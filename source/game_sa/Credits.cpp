@@ -2,9 +2,6 @@
 
 #include "Credits.h"
 
-uint32& CCredits::CreditsStartTime = *(uint32*)0xC6E978;
-bool& CCredits::bCreditsGoing = *(bool*)0xC6E97C;
-
 void CCredits::InjectHooks() {
     RH_ScopedClass(CCredits);
     RH_ScopedCategoryGlobal();
@@ -30,13 +27,15 @@ void CCredits::Stop() {
 
 // 0x53D5B0
 void CCredits::Render() {
+    ZoneScoped;
+
     if (bCreditsGoing && !FrontEndMenuManager.m_bMenuActive) {
         RenderCredits();
     }
 }
 
 // 0x5A8660
-void CCredits::PrintCreditText(float scaleX, float scaleY, const char* text, uint32& position, float currentOffset, bool highlighted) {
+void CCredits::PrintCreditText(float scaleX, float scaleY, const GxtChar* text, uint32& position, float currentOffset, bool highlighted) {
     const uint32 minPosY = 20;
     const float  pos = float(position) + SCREEN_HEIGHT + minPosY - currentOffset;
 

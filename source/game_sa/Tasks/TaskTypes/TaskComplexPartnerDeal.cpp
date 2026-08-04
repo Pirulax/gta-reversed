@@ -4,7 +4,7 @@
 
 void CTaskComplexPartnerDeal::InjectHooks()
 {
-    RH_ScopedClass(CTaskComplexPartnerDeal);
+    RH_ScopedVirtualClass(CTaskComplexPartnerDeal, 0x870754, 14);
     RH_ScopedCategory("Tasks/TaskTypes");
     RH_ScopedInstall(Constructor, 0x684190);
 }
@@ -13,7 +13,7 @@ CTaskComplexPartnerDeal::CTaskComplexPartnerDeal(const char* commandName, CPed* 
     CTaskComplexPartner(commandName, partner, leadSpeaker, distanceMultiplier, true, 1, point)
 {
     m_taskId = TASK_COMPLEX_PARTNER_DEAL;
-    strcpy(m_animBlockName, "gangs");
+    strcpy_s(m_animBlockName, "gangs");
 }
 
 CTaskComplexPartnerDeal* CTaskComplexPartnerDeal::Constructor(const char* commandName, CPed* partner, bool leadSpeaker, float distanceMultiplier, CVector point)

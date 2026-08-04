@@ -8,26 +8,24 @@
 
 #include <numeric>
 #include <span>
-#include "PluginBase.h" // !!!
-#include "RenderWare.h"
+#include <rwplcore.h>
+#include "Vector2D.h"
 
 class CMatrix;
-class CVector2D;
 
 class CVector : public RwV3d {
 public:
     constexpr CVector() = default;
-    constexpr CVector(float X, float Y, float Z) : RwV3d{X, Y, Z} {}
+    constexpr CVector(float X, float Y, float Z) : RwV3d{ X, Y, Z } {}
     constexpr CVector(RwV3d rwVec) { x = rwVec.x; y = rwVec.y; z = rwVec.z; }
-    constexpr CVector(const CVector* rhs) { x = rhs->x; y = rhs->y; z = rhs->z; }
     constexpr explicit CVector(float value) { x = y = z = value; }
-
-    explicit CVector(const CVector2D& v2, float z);
+    explicit CVector(const CVector2D& v2, float z = 0.f);
 
 public:
     static void InjectHooks();
 
     static CVector Random(float min, float max);
+    static CVector Random(CVector min, CVector max);
 
     // Returns length of vector
     float Magnitude() const;
@@ -42,13 +40,38 @@ public:
     float NormaliseAndMag();
 
     /// Get a normalized copy of this vector
-    auto Normalized() const -> CVector;
+    auto Normalized(float* outMag = nullptr) const -> CVector {
+        CVector cpy = *this;
+        const float mag = cpy.NormaliseAndMag();
+        if (outMag) {
+            *outMag = mag;
+        }
+        return cpy;
+    }
 
     /// Perform a dot product with this and `o`, returning the result
     auto Dot(const CVector& o) const -> float;
 
-    // Performs cross calculation
-    void Cross(const CVector& left, const CVector& right);
+    /// Perform a 2D dot product with this and `o`, returning the result
+    auto Dot2D(const CVector& o) const -> float;
+
+    /*!
+    * @notsa
+    *
+    * There's an SA function with the same name,
+    * but don't get confused, that one stores the
+    * result in-place.
+    * 
+    * @return The cross product of `*this` and `o`
+    */
+    auto Cross(const CVector& other) const -> CVector;
+
+    /*!
+    * @addr 0x70F890
+    *
+    * The original Cross function that stores the result in-place
+    */
+    void Cross_OG(const CVector& a, const CVector& b);
 
     // Adds left + right and stores result
     void Sum(const CVector& left, const CVector& right);
@@ -122,11 +145,17 @@ public:
         return (&x)[i];
     }
 
-    //! Calculate the average position
-    static CVector Average(const CVector* begin, const CVector* end);
+    //! Get a copy of `*this` vector projected onto `projectOnTo` (which is assumed to be unit length)
+    //! The result will have a magnitude of `sqrt(abs(this->Dot(projectOnTo)))`
+    CVector ProjectOnToNormal(const CVector& projectOnTo, float offset = 0.f) const {
+        return projectOnTo * (Dot(projectOnTo) + offset);
+    }
 
-    static CVector AverageN(const CVector* begin, size_t n) {
-        return Average(begin, begin + n);
+    //! Calculate the center of all provided vectors. Same operation as averaging.
+    template<rng::input_range R = std::initializer_list<CVector>>
+        requires rng::sized_range<R>
+    static CVector Centroid(R&& rng) {
+        return rng::fold_left(rng, CVector{}, std::plus{}) / std::size(rng);
     }
 
     auto GetComponents() const {
@@ -138,9 +167,59 @@ public:
 
     /*!
     * @param reMapRangeTo0To2Pi Return value will be in interval [0, 2pi] instead of [-pi, pi]
-    * @returning The heading of the vector in radians.
+    * @return The heading of the vector in radians.
     */
     [[nodiscard]] float Heading(bool reMapRangeTo0To2Pi = false) const;
+
+    /*!
+    * @notsa
+    * @return Make all component's values absolute (positive).
+    */
+    constexpr friend CVector abs(CVector vec) {
+        return { std::abs(vec.x), std::abs(vec.y), std::abs(vec.z) };
+    }
+
+    constexpr friend CVector pow(CVector vec, float power) {
+        return { std::pow(vec.x, power), std::pow(vec.y, power), std::pow(vec.z, power) };
+    }
+    
+    friend constexpr CVector operator*(const CVector& vec, float multiplier) {
+        return { vec.x * multiplier, vec.y * multiplier, vec.z * multiplier };
+    }
+
+#ifdef _DEBUG
+    bool HasNanOrInf() const {
+        for (auto i = 0; i < 3; i++) {
+            const auto v = (*this)[i];
+            if (std::isnan(v) || std::isinf(v)) {
+                return true;
+            }
+        }
+        return false;
+    }
+#endif
+
+    /*!
+    * @brief Prefer this over (a - b).Magnitude()
+    * @param a Point A
+    * @param b Point B
+    * @return 3D Distance between 2 points
+    */
+    static inline float Dist(CVector a, CVector b) {
+        return (a - b).Magnitude();
+    }
+
+    /*!
+    * @brief Prefer this over (a - b).SquaredMagnitude()
+    * @param a Point A
+    * @param b Point B
+    * @return 3D Squared distance between 2 points
+    */
+    static inline float DistSqr(CVector a, CVector b) {
+        return (a - b).SquaredMagnitude();
+    }
+
+    NLOHMANN_DEFINE_TYPE_INTRUSIVE(CVector, x, y, z);
 };
 VALIDATE_SIZE(CVector, 0xC);
 
@@ -172,9 +251,6 @@ constexpr inline bool operator==(const CVector& vecLeft, const CVector& vecRight
     return vecLeft.x == vecRight.x && vecLeft.y == vecRight.y && vecLeft.z == vecRight.z;
 }
 
-constexpr inline CVector operator*(const CVector& vec, float multiplier) {
-    return { vec.x * multiplier, vec.y * multiplier, vec.z * multiplier };
-}
 
 constexpr inline CVector operator/(const CVector& vec, float dividend) {
     return { vec.x / dividend, vec.y / dividend, vec.z / dividend };
@@ -200,6 +276,14 @@ inline CVector Lerp(const CVector& vecOne, const CVector& vecTwo, float fProgres
     return vecOne * (1.0F - fProgress) + vecTwo * fProgress;
 }
 
+//! Component-wise clamp of values
+inline CVector Clamp(CVector val, CVector min, CVector max) {
+    for (auto i = 0; i < 3; i++) {
+        val[i] = std::clamp(val[i], min[i], max[i]);
+    }
+    return val;
+}
+
 inline CVector Pow(const CVector& vec, float fPow) {
     return { pow(vec.x, fPow), pow(vec.y, fPow), pow(vec.z, fPow) };
 }
@@ -214,6 +298,6 @@ static CVector ProjectVector(const CVector& what, const CVector& onto) {
     return onto * (DotProduct(what, onto) / onto.SquaredMagnitude());
 }
 
-CVector Multiply3x3(const CMatrix& m, const CVector& v);
-CVector Multiply3x3(const CVector& v, const CMatrix& m);
-CVector MultiplyMatrixWithVector(const CMatrix& mat, const CVector& vec);
+[[deprecated]] inline CVector Multiply3x3_MV(const CMatrix& m, const CVector& v) { NOTSA_UNREACHABLE("Use `m.TransformVector(v)` instead"); }
+[[deprecated]] inline CVector Multiply3x3_VM(const CVector& v, const CMatrix& m) { NOTSA_UNREACHABLE("Use `m.InverseTransformVector(v)` m"); }
+[[deprecated]] inline CVector MultiplyMatrixWithVector(const CMatrix& mat, const CVector& vec) { NOTSA_UNREACHABLE("Use `m.TransformPoint(v)` instead"); }

@@ -1,9 +1,10 @@
 #pragma once
 
 #include "TaskSimple.h"
+#include "Enums/eMoveState.h"
 #include "Vector.h"
 
-class CTaskSimpleGoTo : public CTaskSimple {
+class NOTSA_EXPORT_VTABLE CTaskSimpleGoTo : public CTaskSimple {
 public:
     eMoveState m_moveState;
     CVector    m_vecTargetPoint;
@@ -18,7 +19,7 @@ public:
         uint8 m_GoToFlags;
     };
 
-    static float& ms_fLookAtThresholdDotProduct;
+    static inline auto& ms_fLookAtThresholdDotProduct = StaticRef<float>(0xC18D48);
 
 public:
     CTaskSimpleGoTo(eMoveState moveState, const CVector& targetPoint, float fRadius);
@@ -27,6 +28,13 @@ public:
     bool HasCircledTarget(CPed* ped);
     void SetUpIK(CPed* ped);
     void QuitIK(CPed* ped);
+
+    auto GetTargetPt()           const { return m_vecTargetPoint; }
+    void SetTargetPt(CVector pt)       { m_vecTargetPoint = pt;   }
+
+    auto GetTargetPtRadius()        const { return m_fRadius; }
+    void SetTargetPtRadius(float r)       { m_fRadius = r;    }
+
 
 private:
     friend void InjectHooksMain();
@@ -38,5 +46,4 @@ private:
         return this;
     }
 };
-
 VALIDATE_SIZE(CTaskSimpleGoTo, 0x20);

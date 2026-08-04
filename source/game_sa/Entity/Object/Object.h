@@ -24,18 +24,18 @@ class CFire;
 
 class NOTSA_EXPORT_VTABLE CObject : public CPhysical {
 public:
-    CPtrNodeDoubleLink* m_pControlCodeList;
-    uint8               m_nObjectType; // see enum eObjectType
-    uint8               m_nBonusValue;
-    uint16              m_wCostValue;
+    CPtrNodeDoubleLink<CObject*>* m_pControlCodeList;
+    uint8                         m_nObjectType; // see enum eObjectType
+    uint8                         m_nBonusValue;
+    uint16                        m_wCostValue;
     union {
         struct {
             uint32 bIsPickup : 1;               // 0x1
-            uint32 b0x02 : 1;                   // 0x2
+            uint32 b0x02 : 1;                   // 0x2 - collision related
             uint32 bPickupPropertyForSale : 1;  // 0x4
             uint32 bPickupInShopOutOfStock : 1; // 0x8
-            uint32 bGlassBroken : 1;            // 0x10
-            uint32 b0x20 : 1;                   // 0x20 - Something glass related, see `WindowRespondsToCollision`
+            uint32 bHasBrokenGlass : 1;         // 0x10
+            uint32 bGlassBrokenAltogether : 1;  // 0x20
             uint32 bIsExploded : 1;             // 0x40
             uint32 bChangesVehColor : 1;        // 0x80
 
@@ -52,12 +52,11 @@ public:
             uint32 bIsScaled : 1;
             uint32 bCanBeAttachedToMagnet : 1;
             uint32 bDamaged : 1;
-            uint32 b0x100000 : 1;
-            uint32 b0x200000 : 1;
+            uint32 b0x100000_0x200000 : 2; // something something scripts for brains
             uint32 bFadingIn : 1; // works only for objects with type 2 (OBJECT_MISSION)
             uint32 bAffectedByColBrightness : 1;
 
-            uint32 b0x1000000 : 1;
+            uint32 bEnableDisabledAttractors : 1;
             uint32 bDoNotRender : 1;
             uint32 bFadingIn2 : 1;
             uint32 b0x08000000 : 1;
@@ -82,17 +81,17 @@ public:
     float         m_fScale;
     CObjectData*  m_pObjectInfo;
     CFire*        m_pFire;
-    int16         m_wScriptTriggerIndex;
+    int16         m_nStreamedScriptBrainToLoad;
     int16         m_wRemapTxd;     // this is used for detached car parts
     RwTexture*    m_pRemapTexture; // this is used for detached car parts
     CDummyObject* m_pDummyObject;  // used for dynamic objects like garage doors, train crossings etc.
     uint32        m_nBurnTime;     // time when particles must be stopped
     float         m_fBurnDamage;
 
-    static uint16& nNoTempObjects;
-    static float&  fDistToNearestTree;
-    static bool&   bAircraftCarrierSamSiteDisabled;
-    static bool&   bArea51SamSiteDisabled;
+    static inline auto& nNoTempObjects = StaticRef<uint16>(0xBB4A70);
+    static inline auto& fDistToNearestTree = StaticRef<float>(0x8D0A20);
+    static inline auto& bAircraftCarrierSamSiteDisabled = StaticRef<bool>(0x8D0A24);
+    static inline auto& bArea51SamSiteDisabled = StaticRef<bool>(0xBB4A72);
 
 public:
     CObject();
@@ -136,11 +135,11 @@ public:
     void     ResetDoorAngle();
     void     LockDoor();
     void     Init();
-    void     DoBurnEffect();
+    void     DoBurnEffect() const;
     void     GetLightingFromCollisionBelow();
     void     ProcessSamSiteBehaviour();
     void     ProcessTrainCrossingBehaviour();
-    void     ObjectDamage(float damage, CVector* fxOrigin, CVector* fxDirection, CEntity* damager, eWeaponType weaponType);
+    void     ObjectDamage(float damage, const CVector* fxOrigin, const CVector* fxDirection, CEntity* damager, eWeaponType weaponType);
     void     Explode();
     void     ObjectFireDamage(float damage, CEntity* damager);
 
@@ -160,12 +159,7 @@ public:
     // Helpers
     [[nodiscard]] bool IsTemporary() const     { return m_nObjectType == OBJECT_TEMPORARY; }
     [[nodiscard]] bool IsMissionObject() const { return m_nObjectType == OBJECT_MISSION || m_nObjectType == OBJECT_MISSION2; }
-    [[nodiscard]] bool IsCraneMovingPart() const {
-        return m_nModelIndex == ModelIndices::MI_CRANE_MAGNET
-            || m_nModelIndex == ModelIndices::MI_CRANE_HARNESS
-            || m_nModelIndex == ModelIndices::MI_MINI_MAGNET
-            || m_nModelIndex == ModelIndices::MI_WRECKING_BALL;
-    }
+    [[nodiscard]] bool IsCraneMovingPart() const;
     [[nodiscard]] bool IsFallenLampPost() const { return objectFlags.bIsLampPost && m_matrix->GetUp().z < 0.66F; }
     [[nodiscard]] bool IsExploded() const       { return objectFlags.bIsExploded; }
     [[nodiscard]] bool CanBeSmashed() const     { return m_nColDamageEffect >= COL_DAMAGE_EFFECT_SMASH_COMPLETELY; }
@@ -174,16 +168,6 @@ private:
     friend void InjectHooksMain();
     static void InjectHooks();
 
-    void  SetIsStatic_Reversed(bool isStatic);
-    void  CreateRwObject_Reversed();
-    void  ProcessControl_Reversed();
-    void  Teleport_Reversed(CVector destination, bool resetRotation);
-    void  SpecialEntityPreCollisionStuff_Reversed(CPhysical* colPhysical, bool bIgnoreStuckCheck, bool& bCollisionDisabled, bool& bCollidedEntityCollisionIgnored, bool& bCollidedEntityUnableToMove, bool& bThisOrCollidedEntityStuck);
-    uint8 SpecialEntityCalcCollisionSteps_Reversed(bool& bProcessCollisionBeforeSettingTimeStep, bool& unk2);
-    void  PreRender_Reversed();
-    void  Render_Reversed();
-    bool  SetupLighting_Reversed();
-    void  RemoveLighting_Reversed(bool bRemove);
 };
 VALIDATE_SIZE(CObject, 0x17C);
 

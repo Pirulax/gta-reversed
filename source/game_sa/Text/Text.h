@@ -6,11 +6,11 @@
 */
 #pragma once
 
+#include "FileMgr.h"
+#include "GxtChar.h"
 #include "Data.h"
 #include "KeyArray.h"
 #include "MissionTextOffsets.h"
-
-namespace TextDebugModule { void ProcessImGui(); };
 
 struct ChunkHeader {
     char  magic[4];
@@ -41,7 +41,7 @@ public:
      *
      * @return The text identified by the given key or the GXT error string.
      */
-    [[nodiscard]] char* Get(const char* key);
+    [[nodiscard]] const GxtChar* Get(const char* key);
     void GetNameOfLoadedMissionText(char* outStr);
 
     void LoadMissionText(const char* mission);
@@ -65,7 +65,7 @@ public:
 
 private:
     bool ReadChunkHeader(ChunkHeader* header, FILESTREAM file, uint32* offset, uint8 unknown);
-    [[nodiscard]] char GetUpperCase(char c) const;
+    [[nodiscard]] char GetUpperCase(const char c) const;
 
 public:
     auto GetKeys() { return std::span{ m_MainKeyArray.m_data, m_MainKeyArray.m_size }; }
@@ -75,14 +75,14 @@ public:
     auto& GetMissionName() const { return m_szMissionName; }
 
 private:
+    friend class TextDebugModule;
     friend void InjectHooksMain();
     static void InjectHooks();
 
     CText* Constructor();
     CText* Destructor();
 
-    friend void TextDebugModule::ProcessImGui();
 };
 VALIDATE_SIZE(CText, 0xA90);
 
-static inline CText& TheText = *(CText*)0xC1B340;
+static inline auto& TheText = StaticRef<CText>(0xC1B340);

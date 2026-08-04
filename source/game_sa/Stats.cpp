@@ -11,43 +11,15 @@
 #include "MenuSystem.h"
 #include "Hud.h"
 
-tStatMessage (&CStats::StatMessage)[8] = *(tStatMessage(*)[8])0xB78200;
-char (&CStats::LastMissionPassedName)[8] = *(char(*)[8])0xB78A00;
-int32 (&CStats::TimesMissionAttempted)[100] = *(int32(*)[100])0xB78CC8;
-int32 (&CStats::FavoriteRadioStationList)[14] = *(int32(*)[14])0xB78E58;
-int32 (&CStats::PedsKilledOfThisType)[32] = *(int32(*)[32])0xB78E90;
-float (&CStats::StatReactionValue)[59] = *(float(*)[59])0xB78F10;
-int32 (&CStats::StatTypesInt)[223] = *(int32(*)[223])0xB79000;
-float (&CStats::StatTypesFloat)[82] = *(float(*)[82])0xB79380;
-uint32& CStats::TotalNumStatMessages = *(uint32*)0xB794D0;
-bool& CStats::bStatUpdateMessageDisplayed = *(bool*)0xB794D4;
-uint32& CStats::m_SprintStaminaCounter = *(uint32*)0xB794D8;
-uint32& CStats::m_CycleStaminaCounter = *(uint32*)0xB794DC;
-uint32& CStats::m_CycleSkillCounter = *(uint32*)0xB794E0;
-uint32& CStats::m_SwimStaminaCounter = *(uint32*)0xB794E4;
-uint32& CStats::m_SwimUnderWaterCounter = *(uint32*)0xB794E8;
-uint32& CStats::m_DrivingCounter = *(uint32*)0xB794EC;
-uint32& CStats::m_FlyingCounter = *(uint32*)0xB794F0;
-uint32& CStats::m_BoatCounter = *(uint32*)0xB794F4;
-uint32& CStats::m_BikeCounter = *(uint32*)0xB794F8;
-uint32& CStats::m_FatCounter = *(uint32*)0xB794FC;
-uint32& CStats::m_RunningCounter = *(uint32*)0xB79500;
-uint32& CStats::m_WeaponCounter = *(uint32*)0xB79504;
-uint32& CStats::m_DeathCounter = *(uint32*)0xB79508;
-uint32& CStats::m_MaxHealthCounter = *(uint32*)0xB7950C;
-uint32& CStats::m_AddToHealthCounter = *(uint32*)0xB79510;
-uint32& CStats::m_LastWeaponTypeFired = *(uint32*)0xB79514;
-bool& CStats::bShowUpdateStats = *(bool*)0x8CDE56;
-
 void CStats::InjectHooks() {
     RH_ScopedClass(CStats);
     RH_ScopedCategoryGlobal();
 
     RH_ScopedInstall(Init, 0x55C0C0);
-    RH_ScopedInstall(GetStatValue, 0x558E40);
+    RH_ScopedOverloadedInstall(GetStatValue, "-OG", 0x558E40, float(*)(eStats));
     RH_ScopedInstall(SetStatValue, 0x55A070);
-    RH_ScopedInstall(GetStatType, 0x558E30);
-    RH_ScopedInstall(GetFullFavoriteRadioStationList, 0x558F90);
+    RH_ScopedInstall(IsStatFloat, 0x558E30);
+    /*RH_ScopedInstall(GetFullFavoriteRadioStationList, 0x558F90); - different return type*/
     RH_ScopedInstall(FindCriminalRatingNumber, 0x559080);
     RH_ScopedInstall(GetPercentageProgress, 0x5591E0);
     RH_ScopedInstall(ConvertToMins, 0x559540);
@@ -113,7 +85,7 @@ void CStats::Init() {
 
 // 0x558E40
 float CStats::GetStatValue(eStats stat) {
-    if (!GetStatType(stat)) { // int32
+    if (!IsStatFloat(stat)) { // int32
         assert(stat >= FIRST_INT_STAT);
 
         return static_cast<float>(StatTypesInt[stat - FIRST_INT_STAT]);
@@ -124,7 +96,7 @@ float CStats::GetStatValue(eStats stat) {
 
 // 0x55A070
 void CStats::SetStatValue(eStats stat, float value) {
-    if (GetStatType(stat)) {
+    if (IsStatFloat(stat)) {
         StatTypesFloat[stat] = value;
     } else { // int32
         assert(stat >= FIRST_INT_STAT);
@@ -135,7 +107,7 @@ void CStats::SetStatValue(eStats stat, float value) {
 }
 
 // 0x558E30
-bool CStats::GetStatType(eStats stat) {
+bool CStats::IsStatFloat(eStats stat) {
     return stat < FIRST_UNUSED_STAT;
 }
 
@@ -144,14 +116,9 @@ bool CStats::PopulateFavoriteRadioStationList() {
     return plugin::CallAndReturn<bool, 0x558EC0>();
 }
 
-// 0x558F90
-int32* CStats::GetFullFavoriteRadioStationList() {
-    return FavoriteRadioStationList;
-}
-
 // 0x558FA0
-int32 CStats::FindMostFavoriteRadioStation() {
-    return plugin::CallAndReturn<int32, 0x558FA0>();
+eRadioID CStats::FindMostFavoriteRadioStation() {
+    return plugin::CallAndReturn<eRadioID, 0x558FA0>();
 }
 
 // 0x559010
@@ -303,14 +270,13 @@ void CStats::LoadActionReactionStats() {
     CFileMgr::SetDir("");
 
     auto* file = CFileMgr::OpenFile("DATA\\AR_STATS.DAT", "rb");
-    char statName[64]{}; // unused
 
     for (char* line = CFileLoader::LoadLine(file); line != nullptr; line = CFileLoader::LoadLine(file)) {
         int32 reactId;
         float reactValue;
 
         if (line[0] != '#' && line[0] != NULL) {
-            sscanf(line, "%d %s %f", &reactId, statName, &reactValue);
+            VERIFY(sscanf_s(line, "%d %*s %f", &reactId, &reactValue) == 2);
 
             StatReactionValue[reactId] = reactValue;
         }
@@ -384,8 +350,8 @@ void CStats::RegisterBestPosition(eStats stat, int32 position) {
 }
 
 // 0x55A210
-char* CStats::FindCriminalRatingString() {
-    return plugin::CallAndReturn<char*, 0x55A210>();
+GxtChar* CStats::FindCriminalRatingString() {
+    return plugin::CallAndReturn<GxtChar*, 0x55A210>();
 }
 
 // 0x55A780
@@ -483,7 +449,7 @@ void CStats::DisplayScriptStatUpdateMessage(eStatUpdateState state, eStats stat,
     case STAT_GANG_STRENGTH: {
         if (auto player = FindPlayerPed())
         {
-            auto maxGroup = std::min<uint8>(FindMaxNumberOfGroupMembers(), player->m_pPlayerData->m_nScriptLimitToGangSize);
+            auto maxGroup = std::min<uint8>(FindMaxNumberOfGroupMembers(), player->GetPlayerData()->m_nScriptLimitToGangSize);
             CHud::SetHelpMessageStatUpdate(state, stat, value, maxGroup);
         }
         break;
@@ -509,7 +475,7 @@ void CStats::IncrementStat(eStats stat, float value)
     if (value <= 0.0f)
         return;
 
-    if (GetStatType(stat)) { // float
+    if (IsStatFloat(stat)) { // float
         StatTypesFloat[stat] += value;
 
         if (IsStatCapped(stat))
@@ -670,34 +636,33 @@ void CStats::ModifyStat(eStats stat, float value) {
 
 // 0x5D3B40
 bool CStats::Save() {
-    float unsavedKills = GetStatValue(STAT_KILLS_SINCE_LAST_CHECKPOINT);
-    IncrementStat(STAT_TOTAL_LEGITIMATE_KILLS, unsavedKills);
+    IncrementStat(STAT_TOTAL_LEGITIMATE_KILLS, GetStatValue(STAT_KILLS_SINCE_LAST_CHECKPOINT));
     SetStatValue(STAT_KILLS_SINCE_LAST_CHECKPOINT, 0.0f);
 
-    CGenericGameStorage::SaveDataToWorkBuffer(StatTypesFloat,           sizeof(StatTypesFloat));
-    CGenericGameStorage::SaveDataToWorkBuffer(StatTypesInt,             sizeof(StatTypesInt));
-    CGenericGameStorage::SaveDataToWorkBuffer(PedsKilledOfThisType,     sizeof(PedsKilledOfThisType));
-    CGenericGameStorage::SaveDataToWorkBuffer(LastMissionPassedName,    sizeof(LastMissionPassedName));
-    CGenericGameStorage::SaveDataToWorkBuffer(FavoriteRadioStationList, sizeof(FavoriteRadioStationList));
-    CGenericGameStorage::SaveDataToWorkBuffer(TimesMissionAttempted,    sizeof(TimesMissionAttempted));
-    // todo: CGenericGameStorage::SaveDataToWorkBuffer(&StatMessage,             sizeof(StatMessage));
-    for (int32 i = 0; i < sizeof(StatMessage); i++) {
-        CGenericGameStorage::SaveDataToWorkBuffer(&StatMessage[i].displayed, 1);
+    CGenericGameStorage::SaveDataToWorkBuffer(StatTypesFloat);
+    CGenericGameStorage::SaveDataToWorkBuffer(StatTypesInt);
+    CGenericGameStorage::SaveDataToWorkBuffer(PedsKilledOfThisType);
+    CGenericGameStorage::SaveDataToWorkBuffer(LastMissionPassedName);
+    CGenericGameStorage::SaveDataToWorkBuffer(FavoriteRadioStationList);
+    CGenericGameStorage::SaveDataToWorkBuffer(TimesMissionAttempted);
+    // TODO: NOTSA: CGenericGameStorage::SaveDataToWorkBuffer(StatMessage);
+    for (auto& statMessage : StatMessage) {
+        CGenericGameStorage::SaveDataToWorkBuffer(statMessage.displayed);
     }
     return true;
 }
 
 // 0x5D3BF0
 bool CStats::Load() {
-    CGenericGameStorage::LoadDataFromWorkBuffer(StatTypesFloat,           sizeof(StatTypesFloat));
-    CGenericGameStorage::LoadDataFromWorkBuffer(StatTypesInt,             sizeof(StatTypesInt));
-    CGenericGameStorage::LoadDataFromWorkBuffer(PedsKilledOfThisType,     sizeof(PedsKilledOfThisType));
-    CGenericGameStorage::LoadDataFromWorkBuffer(LastMissionPassedName,    sizeof(LastMissionPassedName));
-    CGenericGameStorage::LoadDataFromWorkBuffer(FavoriteRadioStationList, sizeof(FavoriteRadioStationList));
-    CGenericGameStorage::LoadDataFromWorkBuffer(TimesMissionAttempted,    sizeof(TimesMissionAttempted));
-    // todo: CGenericGameStorage::LoadDataFromWorkBuffer(&StatMessage,             sizeof(StatMessage));
-    for (int32 i = 0; i < sizeof(StatMessage); i++) {
-        CGenericGameStorage::LoadDataFromWorkBuffer(&StatMessage[i].displayed, 1);
+    CGenericGameStorage::LoadDataFromWorkBuffer(StatTypesFloat);
+    CGenericGameStorage::LoadDataFromWorkBuffer(StatTypesInt);
+    CGenericGameStorage::LoadDataFromWorkBuffer(PedsKilledOfThisType);
+    CGenericGameStorage::LoadDataFromWorkBuffer(LastMissionPassedName);
+    CGenericGameStorage::LoadDataFromWorkBuffer(FavoriteRadioStationList);
+    CGenericGameStorage::LoadDataFromWorkBuffer(TimesMissionAttempted);
+    // TODO: NOTSA: CGenericGameStorage::LoadDataFromWorkBuffer(StatMessage);
+    for (auto& statMessage : StatMessage) {
+        CGenericGameStorage::LoadDataFromWorkBuffer(statMessage.displayed);
     }
     return true;
 }
@@ -705,10 +670,10 @@ bool CStats::Load() {
 // Unused
 // 0x558DE0
 char* CStats::GetStatID(eStats stat) {
-    if (!GetStatType(stat)) // int32
-        sprintf(gString, "stat_i_%d", stat);
+    if (!IsStatFloat(stat)) // int32
+        sprintf_s(gString, "stat_i_%d", stat);
     else
-        sprintf(gString, "stat_f_%d", stat);
+        sprintf_s(gString, "stat_f_%d", stat);
 
     return gString;
 }

@@ -13,15 +13,15 @@
 
 class NOTSA_EXPORT_VTABLE CTaskComplexPlayHandSignalAnim : public CTaskComplex {
 public:
-    static inline uint32& ms_animBlock = *(uint32*)0x8D2E38;
+    static inline auto& ms_animBlock = StaticRef<uint32>(0x8D2E38);
 
 public:
     AnimationId m_animationId{};
-    float       m_fBlendFactor{};
+    float       m_AnimBlenDelta{};
     bool        m_bLeftHandLoaded : 1{};
     bool        m_bRightHandLoaded : 1{};
     bool        m_bAnimationLoaded : 1{};
-    bool        m_bUseFatHands : 1{};
+    bool        m_DoUseFatHands : 1{};
 
 public:
     static constexpr auto Type = TASK_COMPLEX_HANDSIGNAL_ANIM;
@@ -36,8 +36,8 @@ public:
 
     CTask* CreateSubTask(eTaskType taskType);
 
-    CTask*    Clone() override;
-    eTaskType GetTaskType() override { return Type; }
+    CTask*    Clone() const override;
+    eTaskType GetTaskType() const override { return Type; }
     CTask*    CreateNextSubTask(CPed* ped) override;
     CTask*    CreateFirstSubTask(CPed* ped) override;
     CTask*    ControlSubTask(CPed* ped) override;

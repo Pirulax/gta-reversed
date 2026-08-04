@@ -10,39 +10,10 @@
 
 #include "eLanguage.h"
 
-CFontChar (&FontRenderStateBuf)[9] = *(CFontChar(*)[9])0xC716B0;
-CFontChar* pEmptyChar = (CFontChar*)0xC716A8;
+auto& FontRenderStateBuf = StaticRef<std::array<CFontChar, 9>>(0xC716B0);
+auto& pEmptyChar = StaticRef<CFontChar*>(0xC716A8);
 
-CFontChar& CFont::RenderState = *(CFontChar*)0xC71AA0;
-CSprite2d (&CFont::Sprite)[MAX_FONT_SPRITES] = *(CSprite2d(*)[2])0xC71AD0;
-CSprite2d (&CFont::ButtonSprite)[MAX_FONT_BUTTON_SPRITES] = *(CSprite2d(*)[15])0xC71AD8;
-eExtraFontSymbol& CFont::PS2Symbol = *(eExtraFontSymbol*)0xC71A54;
-bool& CFont::m_bNewLine = *(bool*)0xC71A55;
-CRGBA& CFont::m_Color = *(CRGBA*)0xC71A60;
-CVector2D& CFont::m_Scale = *(CVector2D*)0xC71A64;
-float& CFont::m_fSlant = *(float*)0xC71A6C;
-CVector2D& CFont::m_fSlantRefPoint = *(CVector2D*)0xC71A70;
-bool& CFont::m_bFontJustify = *(bool*)0xC71A78;
-bool& CFont::m_bFontCentreAlign = *(bool*)0xC71A79;
-bool& CFont::m_bFontRightAlign = *(bool*)0xC71A7A;
-bool& CFont::m_bFontBackground = *(bool*)0xC71A7B;
-bool& CFont::m_bEnlargeBackgroundBox = *(bool*)0xC71A7C;
-bool& CFont::m_bFontPropOn = *(bool*)0xC71A7D;
-bool& CFont::m_bFontIsBlip = *(bool*)0xC71A7E;
-float& CFont::m_fFontAlpha = *(float*)0xC71A80;
-CRGBA& CFont::m_FontBackgroundColor = *(CRGBA*)0xC71A84;
-float& CFont::m_fWrapx = *(float*)0xC71A88;
-float& CFont::m_fFontCentreSize = *(float*)0xC71A8C;
-float& CFont::m_fRightJustifyWrap = *(float*)0xC71A90;
-uint8& CFont::m_FontTextureId = *(uint8*)0xC71A94;
-uint8& CFont::m_FontStyle = *(uint8*)0xC71A95;
-uint8& CFont::m_nFontShadow = *(uint8*)0xC71A96;
-CRGBA& CFont::m_FontDropColor = *(CRGBA*)0xC71A97;
-uint8& CFont::m_nFontOutlineSize = *(uint8*)0xC71A9B;
-uint8& CFont::m_nFontOutline = *(uint8*)0xC71A9C;
-uint8& CFont::m_nFontOutlineOrShadow = *(uint8*)0xC71A9C;
-
-tFontData (&gFontData)[2] = *(tFontData(*)[2])0xC718B0;
+auto& gFontData = StaticRef<std::array<tFontData, 2>>(0xC718B0);
 
 void CFont::InjectHooks() {
     RH_ScopedClass(CFont);
@@ -104,35 +75,35 @@ void CFont::LoadFontValues() {
         if (*line == '\0' || *line == '#')
             continue;
 
-        if (sscanf(line, "%31s", attrib) == EOF) // FIX_BUGS: buffer overflow
+        if (sscanf_s(line, "%s", SCANF_S_STR(attrib)) == EOF)
             continue;
 
         if (!memcmp(attrib, "[TOTAL_FONTS]", 14)) {
             auto nextLine = CFileLoader::LoadLine(file);
 
-            sscanf(nextLine, "%d", &totalFonts);
+            VERIFY(sscanf_s(nextLine, "%d", &totalFonts) == 1);
         }
         else if (!memcmp(attrib, "[FONT_ID]", 10)) {
             auto nextLine = CFileLoader::LoadLine(file);
 
-            sscanf(nextLine, "%d", &fontId);
+            VERIFY(sscanf_s(nextLine, "%d", &fontId) == 1);
         }
         else if (!memcmp(attrib, "[REPLACEMENT_SPACE_CHAR]", 25)) {
             auto nextLine = CFileLoader::LoadLine(file);
-            uint32 spaceValue;
+            uint8 spaceValue;
 
-            sscanf(nextLine, "%d", &spaceValue); // maybe use inttypes?
+            VERIFY(sscanf_s(nextLine, "%hhu", &spaceValue) == 1);
             gFontData[fontId].m_spaceValue = spaceValue;
         }
         else if (!memcmp(attrib, "[PROP]", 7)) {
             for (int32 i = 0; i < 26; i++) {
                 auto nextLine = CFileLoader::LoadLine(file);
-                int32 propValues[8];
+                int32 propValues[8]{};
 
-                sscanf(nextLine, "%d  %d  %d  %d  %d  %d  %d  %d",
+                VERIFY(sscanf_s(nextLine, "%d  %d  %d  %d  %d  %d  %d  %d",
                     &propValues[0], &propValues[1], &propValues[2], &propValues[3],
                     &propValues[4], &propValues[5], &propValues[6], &propValues[7]
-               );
+                ) == 8);
 
                 for (auto j = 0u; j < std::size(propValues); j++) {
                     gFontData[fontId].m_propValues[i * 8 + j] = propValues[j];
@@ -143,7 +114,7 @@ void CFont::LoadFontValues() {
             auto nextLine = CFileLoader::LoadLine(file);
             uint32 unpropValue;
 
-            sscanf(nextLine, "%d", &unpropValue);
+            VERIFY(sscanf_s(nextLine, "%d", &unpropValue) == 1);
             gFontData[fontId].m_unpropValue = unpropValue;
         }
     }
@@ -605,6 +576,8 @@ void CFont::SetOrientation(eFontAlignment alignment) {
 // Need to call this each frame
 // 0x719800
 void CFont::InitPerFrame() {
+    ZoneScoped;
+
     m_nFontOutline = 0;
     m_nFontOutlineOrShadow = 0;
     m_nFontShadow = 0;
@@ -623,16 +596,16 @@ void CFont::RenderFontBuffer() {
 }
 
 // 0x71A0E0
-float CFont::GetStringWidth(const char* string, bool full, bool scriptText) {
+float CFont::GetStringWidth(const GxtChar* string, bool full, bool scriptText) {
     size_t len = CMessages::GetStringLength(string);
-    char data[400] = {0};
+    GxtChar data[400] = { 0 };
 
-    strncpy(data, string, len);
+    strncpy_s((char*)data, sizeof(data), AsciiFromGxtChar(string), len);
     CMessages::InsertPlayerControlKeysInString(data);
 
     float width = 0.0f;
     bool lastWasTag = false, lastWasLetter = false;
-    char* pStr = data;
+    auto* pStr = data;
 
     while (true) {
         if (*pStr == ' ' && !full)
@@ -644,7 +617,7 @@ float CFont::GetStringWidth(const char* string, bool full, bool scriptText) {
             if (!full && (lastWasTag || lastWasLetter))
                 return width;
 
-            char* next = pStr + 1;
+            auto* next = pStr + 1;
 
             if (*next != '~') {
                 for (; *next && *next != '~'; next++);
@@ -678,26 +651,28 @@ float CFont::GetStringWidth(const char* string, bool full, bool scriptText) {
 
 // same as RenderFontBuffer() (0x71A210)
 void CFont::DrawFonts() {
+    ZoneScoped;
+
     RenderFontBuffer();
 }
 
 // 0x71A220
-int16 CFont::ProcessCurrentString(bool print, float x, float y, const char* text) {
-    return plugin::CallAndReturn<int16, 0x71A220, bool, float, float, const char*>(print, x, y, text);
+int16 CFont::ProcessCurrentString(bool print, float x, float y, const GxtChar* text) {
+    return plugin::CallAndReturn<int16, 0x71A220, bool, float, float, const GxtChar*>(print, x, y, text);
 }
 
 // 0x71A5E0
-int16 CFont::GetNumberLines(float x, float y, const char* text) {
+int16 CFont::GetNumberLines(float x, float y, const GxtChar* text) {
     return ProcessCurrentString(false, x, y, text);
 }
 
 // 0x71A600
-int16 CFont::ProcessStringToDisplay(float x, float y, const char* text) {
+int16 CFont::ProcessStringToDisplay(float x, float y, const GxtChar* text) {
     return ProcessCurrentString(true, x, y, text);
 }
 
 // 0x71A620
-void CFont::GetTextRect(CRect* rect, float x, float y, const char* text) {
+void CFont::GetTextRect(CRect* rect, float x, float y, const GxtChar* text) {
     if (m_bFontCentreAlign) {
         rect->left = x - (m_fFontCentreSize / 2.0f + 4.0f);
         rect->right = m_fFontCentreSize / 2.0f + x + 4.0f;
@@ -716,7 +691,7 @@ void CFont::GetTextRect(CRect* rect, float x, float y, const char* text) {
 }
 
 // 0x71A700
-void CFont::PrintString(float x, float y, const char* text) {
+void CFont::PrintString(float x, float y, const GxtChar* text) {
     if (*text == '\0' || *text == '*')
         return;
 
@@ -743,7 +718,7 @@ void CFont::PrintString(float x, float y, const char* text) {
 }
 
 // 0x71A820
-void CFont::PrintStringFromBottom(float x, float y, const char* text) {
+void CFont::PrintStringFromBottom(float x, float y, const GxtChar* text) {
     float drawY = y - GetHeight() * (float)GetNumberLines(x, y, text);
 
     if (m_fSlant != 0.0f)

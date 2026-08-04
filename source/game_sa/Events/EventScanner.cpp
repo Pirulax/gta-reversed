@@ -2,11 +2,9 @@
 
 #include "EventScanner.h"
 
-float& CPedAcquaintanceScanner::ms_fThresholdDotProduct = *(float*)0xC0B034;
-
 // 0x605300
 CEventScanner::CEventScanner() {
-    m_nNextScanTime = CTimer::GetTimeInMS() - CGeneral::GetRandomNumberInRange(0, -3000); // Originally should be -3000.0f (float value)
+    m_nNextScanTime = CTimer::GetTimeInMS() + CGeneral::GetRandomNumberInRange(3000u); // Originally should be -3000.0f (float value)
 }
 
 void CEventScanner::Clear() {

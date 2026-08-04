@@ -1,5 +1,5 @@
 #include "StdInc.h"
-#include "IKChainManager_c.h"
+#include "Ragdoll/IKChainManager.h"
 #include "TaskComplexInvestigateDeadPed.h"
 #include "TaskComplexGoToPointAndStandStill.h"
 #include "TaskSimpleStandStill.h"
@@ -122,7 +122,7 @@ CTask* CTaskComplexInvestigateDeadPed::ControlSubTask(CPed* ped) {
         break;
     }
     case TASK_SIMPLE_ANIM: {
-        ped->Say(181);
+        ped->Say(CTX_GLOBAL_SHOCKED);
         break;
     }
     }

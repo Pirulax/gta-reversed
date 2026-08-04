@@ -2,9 +2,6 @@
 
 #include "Skidmarks.h"
 
-RxVertexIndex (&CSkidmarks::m_aIndices)[96] = *reinterpret_cast<uint16 (*)[96]>(0xC799C8);
-RwTexture*& CSkidmarks::m_pTexture = *reinterpret_cast<RwTexture**>(0xC79A88);
-CSkidmark (&CSkidmarks::m_aSkidmarks)[SKIDMARKS_COUNT] = *reinterpret_cast<CSkidmark (*)[SKIDMARKS_COUNT]>(0xC79AA8);
 
 void CSkidmarks::InjectHooks() {
     RH_ScopedClass(CSkidmarks);
@@ -54,6 +51,8 @@ void CSkidmarks::Clear() {
 
 // 0x7205C0
 void CSkidmarks::Update() {
+    ZoneScoped;
+
     for (CSkidmark& mark : m_aSkidmarks) {
         mark.Update();
     }
@@ -61,6 +60,8 @@ void CSkidmarks::Update() {
 
 // 0x720640
 void CSkidmarks::Render() {
+    ZoneScoped;
+
     RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      RWRSTATE(FALSE));
     RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, RWRSTATE(TRUE));
     RwRenderStateSet(rwRENDERSTATESRCBLEND,          RWRSTATE(rwBLENDSRCALPHA));

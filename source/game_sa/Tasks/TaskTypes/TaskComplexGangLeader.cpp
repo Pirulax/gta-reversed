@@ -1,5 +1,5 @@
 #include "StdInc.h"
-#include "IKChainManager_c.h"
+#include "Ragdoll/IKChainManager.h"
 #include "ModelIndices.h"
 #include "EventPassObject.h"
 #include "EventGroupEvent.h"
@@ -111,30 +111,22 @@ void CTaskComplexGangLeader::DoGangAbuseSpeech(CPed* talker, CPed* sayTo) {
         return;
     }
 
-    if (!talker->IsGangster() && !sayTo->IsPlayer()) { // Second check is redundant.
+    if (!sayTo->IsGangster() && !sayTo->IsPlayer()) {
         return;
     }
 
     if (const auto phrase = [&] {
         switch (sayTo->m_nPedType) {
-        case PED_TYPE_GANG1:
-            return 1;
-        case PED_TYPE_GANG2:
-        case PED_TYPE_PLAYER1:
-        case PED_TYPE_PLAYER2:
-            return 4;
-        case PED_TYPE_GANG4:
-            return 7;
-        case PED_TYPE_GANG5:
-            return 8;
-        case PED_TYPE_GANG6:
-            return 6;
-        case PED_TYPE_GANG7:
-            return 5;
-        case PED_TYPE_GANG8:
-            return 3;
-        default:
-            return 0;
+        case PED_TYPE_GANG1:   return CTX_GLOBAL_ABUSE_GANG_BALLAS;
+        case PED_TYPE_GANG2:   
+        case PED_TYPE_PLAYER1: 
+        case PED_TYPE_PLAYER2: return CTX_GLOBAL_ABUSE_GANG_FAMILIES;
+        case PED_TYPE_GANG4:   return CTX_GLOBAL_ABUSE_RIFA;
+        case PED_TYPE_GANG5:   return CTX_GLOBAL_ABUSE_DA_NANG;
+        case PED_TYPE_GANG6:   return CTX_GLOBAL_ABUSE_MAFIA;
+        case PED_TYPE_GANG7:   return CTX_GLOBAL_ABUSE_TRIAD;
+        case PED_TYPE_GANG8:   return CTX_GLOBAL_ABUSE_GANG_VLA;
+        default:               return CTX_GLOBAL_NO_SPEECH;
         }
     }()) {
         talker->Say(phrase);
@@ -145,7 +137,7 @@ void CTaskComplexGangLeader::DoGangAbuseSpeech(CPed* talker, CPed* sayTo) {
 CPed* CTaskComplexGangLeader::TryToPassObject(CPed* ped, CPedGroup* group) {
     const auto [closestPed, distSq] = group->GetMembership().GetMemberClosestTo(ped);
     if (closestPed && sq(4.f) >= distSq) {
-        if (!closestPed->IsPed()) {
+        if (!closestPed->GetIsTypePed()) {
             return closestPed;
         }
     }
@@ -157,7 +149,7 @@ CPed* CTaskComplexGangLeader::TryToPassObject(CPed* ped, CPedGroup* group) {
     float distSq{};
     if (const auto closestPed = group->GetClosestGroupPed(ped, &distSq)) {
         if (distSq < sq(4.f)) {
-            if (!closestPed->IsPed()) {
+            if (!closestPed->GetIsTypePed()) {
                 return closestPed;
             }
         }
@@ -188,7 +180,7 @@ CTask* CTaskComplexGangLeader::CreateNextSubTask(CPed* ped) {
         }
     }
 
-    if (CGeneral::RandomBool(5) || 3 > m_gang->GetMembership().CountMembers()) {
+    if (CGeneral::RandomBool(5.f) || 3 > m_gang->GetMembership().CountMembers()) {
         m_wanderTimer.Start(CGeneral::GetRandomNumberInRange(0, 15'000));
         return new CTaskComplexWanderGang{ PEDMOVE_WALK, (uint8)CGeneral::GetRandomNumberInRange(0, 8), 5000, true, 0.05f };
     }
@@ -210,7 +202,7 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
         }
     } else if (ShouldLoadGangAnims()) {
         const auto blk = CAnimManager::GetAnimationBlockIndex("gangs");
-        if (CAnimManager::ms_aAnimBlocks[blk].bLoaded) {
+        if (CAnimManager::GetAnimBlocks()[blk].IsLoaded) {
             CAnimManager::AddAnimBlockRef(blk);
             m_animsReferenced = true;
         } else {
@@ -219,9 +211,9 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
     }
 
     // If we're wandering and the wander time is out of time...
-    if (const auto wander = CTask::DynCast<CTaskComplexWander>(m_pSubTask)) { // 0x66241F
+    if (const auto tWander = notsa::dyn_cast_if_present<CTaskComplexWander>(m_pSubTask)) { // 0x66241F
         if (m_wanderTimer.IsOutOfTime()) {
-            if (wander->GetDistSqOfClosestPathNodeToPed(ped) <= 2.f) {
+            if (tWander->GetDistSqOfClosestPathNodeToPed(ped) <= 2.f) {
                 m_gang->GetIntelligence().SetDefaultTaskAllocatorType(ePedGroupDefaultTaskAllocatorType::RANDOM);
                 // Above call causes this task to be flushed (deleted), and changes our vfptr to `CTaskComplex`'s.
                 // If we return non-null here, `CTaskManager::ParentsControlChildren` will be called, and calls our
@@ -234,11 +226,10 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
     }
 
     if (m_exhaleTimer.IsOutOfTime()) { // 0x6624C1
-        if (ped->m_pRwClump) {
-            if (auto matrix = RwFrameGetMatrix(RpClumpGetFrame(ped->m_pRwClump))) {
-                RwV3d PoS{ 0.f, 0.1f, 0.f };
-                if (const auto fx = g_fxMan.CreateFxSystem("exhale", &PoS, matrix)) {
-                    fx->AttachToBone(ped, ePedBones::BONE_HEAD);
+        if (ped->GetRpClump()) {
+            if (auto matrix = RwFrameGetMatrix(RpClumpGetFrame(ped->GetRpClump()))) {
+                if (const auto fx = g_fxMan.CreateFxSystem("exhale", CVector{ 0.f, 0.1f, 0.f }, matrix)) {
+                    fx->AttachToBone(ped, eBoneTag::BONE_HEAD);
                     fx->PlayAndKill();
                 }
             }
@@ -253,7 +244,7 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
     }
 
     // If ped isn't already looking at someone, find a random meber to look at them
-    if (!g_ikChainMan.IsLooking(ped) && CGeneral::RandomBool(5)) { // 0x662574
+    if (!g_ikChainMan.IsLooking(ped) && CGeneral::RandomBool(5.f)) { // 0x662574
         // The random logic has changed a little here for the sole reason
         // that I want to use `GetRandom()`.
         // This code path is very infrequent anyways (5% chance)...
@@ -313,7 +304,7 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
         DRNKBR_PRTL_F,
         SMKCIG_PRTL_F,
     };
-    const auto GetAnim = [ped](AnimationId id) { return RpAnimBlendClumpGetAssociation(ped->m_pRwClump, id); };
+    const auto GetAnim = [ped](AnimationId id) { return RpAnimBlendClumpGetAssociation(ped->GetRpClump(), id); };
     const CAnimBlendAssociation* anims[]{
         GetAnim(ANIM_ID_DRNKBR_PRTL),
         GetAnim(ANIM_ID_SMKCIG_PRTL),
@@ -336,7 +327,7 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
                 std::array{ SMKCIG_PRTL, SMKCIG_PRTL_F },
                 [&](auto idx) {
                     const auto anim = anims[idx];
-                    return anim && anim->m_fCurrentTime < 0.5f;
+                    return anim && anim->m_CurrentTime < 0.5f;
                 })
             ) {
                 m_exhaleTimer.Start(2700);
@@ -345,9 +336,9 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
     }
 
     if (pedHeldEntity->m_nModelIndex == ModelIndices::MI_GANG_DRINK) { // 0x662729
-        ped->Say(23, 0, 0.2f);
+        ped->Say(CTX_GLOBAL_BOOZE_RECEIVE, 0, 0.2f);
     } else if (pedHeldEntity->m_nModelIndex == ModelIndices::MI_GANG_SMOKE) {
-        ped->Say(200, 0, 0.2f);
+        ped->Say(CTX_GLOBAL_SPLIFF_RECEIVE, 0, 0.2f);
     }
 
     // Now, pass on the entity held in hand (if not already)
@@ -373,9 +364,9 @@ CTask* CTaskComplexGangLeader::ControlSubTask(CPed* ped) {
         if (!passObjTo->GetEntityThatThisPedIsHolding() && passObjTo->IsCurrentlyUnarmed()) {    
             // Very similar to code above, but not quite the same!
             if (pedHeldEntity->m_nModelIndex == ModelIndices::MI_GANG_DRINK) {
-                passObjTo->Say(24);
+                passObjTo->Say(CTX_GLOBAL_BOOZE_REQUEST);
             } else if (pedHeldEntity->m_nModelIndex == ModelIndices::MI_GANG_SMOKE) {
-                passObjTo->Say(201);
+                passObjTo->Say(CTX_GLOBAL_SPLIFF_REQUEST);
             }
             passObjTo->GetEventGroup().Add(CEventPassObject{ ped });
             return new CTaskComplexPassObject{ passObjTo, true };           
@@ -476,7 +467,7 @@ void CTaskComplexGangLeader::ScanForStuff(CPed* ped) {
                 m_gang->GetMembership().AddFollower(&scannedPed);
             }
 
-            // Find a member close enough to the scanned ped, and make the partners
+            // Find a member close enough to the scanned ped, and make them partners
             if (const auto [closestMem, distSq] = m_gang->GetMembership().GetMemberClosestTo(&scannedPed); // 0x65E61F
                 closestMem && sq(10.f) >= distSq && distSq >= sq(4.f)
             ) {           

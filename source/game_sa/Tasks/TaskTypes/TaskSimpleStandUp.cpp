@@ -45,7 +45,7 @@ void CTaskSimpleStandUp::FinishAnimStandUpCB(CAnimBlendAssociation* anim, void* 
 
 // 0x631410
 void CTaskSimpleStandUp::StartAnim(CPed* ped) {
-    const auto SetAnim = [this, ped](auto grpId, auto animId) { m_anim = CAnimManager::BlendAnimation(ped->m_pRwClump, grpId, animId, 4.f); };
+    const auto SetAnim = [this, ped](auto grpId, auto animId) { m_anim = CAnimManager::BlendAnimation(ped->GetRpClump(), grpId, animId, 4.f); };
     if (m_sitAfterStep) {
         SetAnim(ANIM_GROUP_ATTRACTORS, ANIM_ID_STEPSIT_OUT);
     } else {
@@ -59,7 +59,7 @@ bool CTaskSimpleStandUp::MakeAbortable(CPed*, eAbortPriority priority, CEvent co
     switch (priority) {
     case ABORT_PRIORITY_IMMEDIATE: {
         if (m_anim) {
-            m_anim->m_fBlendDelta = -1000.f;
+            m_anim->m_BlendDelta = -1000.f;
             m_anim->SetDefaultFinishCallback();
             m_anim = nullptr;
         }
@@ -74,8 +74,8 @@ bool CTaskSimpleStandUp::MakeAbortable(CPed*, eAbortPriority priority, CEvent co
     }
     case ABORT_PRIORITY_LEISURE: {
         if (m_anim) {
-            m_anim->m_nFlags |= ANIMATION_FREEZE_LAST_FRAME;
-            m_anim->m_fBlendDelta = -4.f;
+            m_anim->m_Flags |= ANIMATION_IS_BLEND_AUTO_REMOVE;
+            m_anim->m_BlendDelta = -4.f;
         }
         return false;
     }

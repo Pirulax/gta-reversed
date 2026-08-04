@@ -65,8 +65,8 @@ void CPlaneTrail::RegisterPoint(CVector pos) {
     if (bDoShift) {
         // Shift right
 #if __cpp_lib_shift >= 202202L 
-        rng::shift_right(m_Timepoints);
-        rng::shift_right(m_Positions);
+        rng::shift_right(m_Timepoints, 1);
+        rng::shift_right(m_Positions, 1);
 #else
         for (auto i = PLANE_TRAIL_BUF_SIZE - 1; i; i--) {
             m_Timepoints[i] = m_Timepoints[i - 1];
@@ -102,9 +102,9 @@ void CPlaneTrail::Update(CVector pos, const CRGBA& color, uint32 coronaIdx, uint
             2000.0f,
             eCoronaType::CORONATYPE_HEADLIGHT,
             eCoronaFlareType::FLARETYPE_NONE,
-            false,
-            false,
-            false,
+            eCoronaReflType::CORREFL_NONE,
+            eCoronaLOSCheck::LOSCHECK_OFF,
+            eCoronaTrail::TRAIL_OFF,
             0.0f,
             false,
             1.5f,

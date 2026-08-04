@@ -36,7 +36,7 @@ void RwHelperInjectHooks() {
 
 // 0x4ABA50
 CEventGlobalGroup* GetEventGlobalGroup() {
-    static CEventGlobalGroup*& globalEvents = *(CEventGlobalGroup**)0xA9AF6C;
+    static auto& globalEvents = StaticRef<CEventGlobalGroup*>(0xA9AF6C);
 
     if (globalEvents)
         return globalEvents;
@@ -51,7 +51,7 @@ void GetNameAndDamage(const char* name, char* objName, bool& bIsDamageModel) {
     const size_t nodesz = strlen(name);
 
     const auto TerminatedCopy = [=](size_t offset) {
-        strncpy(objName, name, nodesz - offset);
+        strncpy_s(objName, nodesz - offset + 1, name, nodesz - offset);
         objName[nodesz - offset] = 0;
     };
 
@@ -69,7 +69,7 @@ void GetNameAndDamage(const char* name, char* objName, bool& bIsDamageModel) {
         ) {
             TerminatedCopy(sizeof("_l0") - 1);
         } else
-            strcpy(objName, name);
+            strcpy_s(objName, strlen(name) + 1, name);
     }
 }
 
@@ -126,11 +126,13 @@ RwFrame* GetFirstChild(RwFrame* frame) {
 
 // 0x734AB0
 RpHAnimHierarchy* GetAnimHierarchyFromFrame(RwFrame* frame) {
+    assert(frame);
     return ((RpHAnimHierarchy * (__cdecl*)(RwFrame*))0x734AB0)(frame);
 }
 
 // 0x734B10
 RpHAnimHierarchy* GetAnimHierarchyFromClump(RpClump* clump) {
+    assert(clump);
     return GetAnimHierarchyFromFrame(RpClumpGetFrame(clump));
 }
 
@@ -281,7 +283,7 @@ void SkinGetBonePositionsToTable(RpClump* clump, RwV3d* table) {
 // 0x7226D0
 RpAtomic* RemoveRefsCB(RpAtomic* atomic, void* data) {
     UNUSED(data);
-    auto* modelInfo = CVisibilityPlugins::GetAtomicModelInfo(atomic);
+    auto* modelInfo = CVisibilityPlugins::GetModelInfo(atomic);
     modelInfo->RemoveRef();
     return atomic;
 }

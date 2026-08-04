@@ -4,8 +4,8 @@
 #include "PostEffects.h"
 
 void AppLightInjectHooks() {
+    RH_ScopedCategory("App");
     RH_ScopedNamespaceName("Light");
-    RH_ScopedCategory("app");
 
     RH_ScopedGlobalInstall(ActivateDirectional, 0x735C80);
     RH_ScopedGlobalInstall(DeActivateDirectional, 0x735C70);
@@ -15,7 +15,7 @@ void AppLightInjectHooks() {
     RH_ScopedGlobalInstall(SetLightsWithTimeOfDayColour, 0x7354E0);
     RH_ScopedGlobalInstall(WorldReplaceNormalLightsWithScorched, 0x7357E0);
     RH_ScopedGlobalInstall(WorldReplaceScorchedLightsWithNormal, 0x735820);
-    // RH_ScopedGlobalInstall(AddAnExtraDirectionalLight, 0x735840);
+    RH_ScopedGlobalInstall(AddAnExtraDirectionalLight, 0x735840);
     RH_ScopedGlobalInstall(RemoveExtraDirectionalLights, 0x7359E0);
     RH_ScopedGlobalInstall(SetAmbientAndDirectionalColours, 0x735A20);
     RH_ScopedGlobalInstall(ReSetAmbientAndDirectionalColours, 0x735C40);
@@ -97,25 +97,19 @@ void LightsDestroy(RpWorld* world) {
     if (!world) {
         return;
     }
-
-    if (pAmbient) {
-        RpWorldRemoveLight(world, pAmbient);
-        RpLightDestroy(pAmbient);
-        pAmbient = nullptr;
-    }
-
-    if (pDirect) {
-        RpWorldRemoveLight(world, pDirect);
-        RwFrameDestroy(RpLightGetFrame(pDirect));
-        RpLightDestroy(pDirect);
-        pDirect = nullptr;
-    }
-
+    const auto DestroyLight = [world](RpLight*& light, bool destroyFrame) {
+        if (light) {
+            RpWorldRemoveLight(world, light);
+            if (destroyFrame) {
+                RwFrameDestroy(RpLightGetFrame(light));
+            }
+            RpLightDestroy(std::exchange(light, nullptr));
+        }
+    };
+    DestroyLight(pAmbient, false);
+    DestroyLight(pDirect, true);
     for (auto& light : pExtraDirectionals) {
-        RpWorldRemoveLight(world, light);
-        RwFrameDestroy(RpLightGetFrame(light));
-        RpLightDestroy(light);
-        light = nullptr;
+        DestroyLight(light, true);
     }
 }
 
@@ -126,24 +120,30 @@ void LightsEnable(int32 enable) {
 
 // 0x7354E0
 void SetLightsWithTimeOfDayColour(RpWorld* world) {
-    assert(world);
-    if (pAmbient) {
-        AmbientLightColourForFrame.red   = CTimeCycle::GetAmbientRed()   * CCoronas::LightsMult;
-        AmbientLightColourForFrame.green = CTimeCycle::GetAmbientGreen() * CCoronas::LightsMult;
-        AmbientLightColourForFrame.blue  = CTimeCycle::GetAmbientBlue()  * CCoronas::LightsMult;
+    ZoneScoped;
 
-        AmbientLightColourForFrame_PedsCarsAndObjects.red   = CTimeCycle::GetAmbientRed_Obj()   * CCoronas::LightsMult;
-        AmbientLightColourForFrame_PedsCarsAndObjects.green = CTimeCycle::GetAmbientGreen_Obj() * CCoronas::LightsMult;
-        AmbientLightColourForFrame_PedsCarsAndObjects.blue  = CTimeCycle::GetAmbientBlue_Obj()  * CCoronas::LightsMult;
+    assert(world);
+
+    if (pAmbient) {
+        AmbientLightColourForFrame = {
+            CTimeCycle::GetAmbientRed()   * CCoronas::LightsMult,
+            CTimeCycle::GetAmbientGreen() * CCoronas::LightsMult,
+            CTimeCycle::GetAmbientBlue()  * CCoronas::LightsMult,
+            AmbientLightColourForFrame.alpha
+        };
+        
+        AmbientLightColourForFrame_PedsCarsAndObjects = {
+            CTimeCycle::GetAmbientRed_Obj()   * CCoronas::LightsMult, 
+            CTimeCycle::GetAmbientGreen_Obj() * CCoronas::LightsMult, 
+            CTimeCycle::GetAmbientBlue_Obj()  * CCoronas::LightsMult,
+            AmbientLightColourForFrame_PedsCarsAndObjects.alpha
+        };
 
         if (CWeather::LightningFlash) {
-            AmbientLightColourForFrame.blue  = 1.0f;
-            AmbientLightColourForFrame.green = 1.0f;
-            AmbientLightColourForFrame.red   = 1.0f;
-            AmbientLightColourForFrame_PedsCarsAndObjects.blue  = 1.0f;
-            AmbientLightColourForFrame_PedsCarsAndObjects.green = 1.0f;
-            AmbientLightColourForFrame_PedsCarsAndObjects.red   = 1.0f;
+            AmbientLightColourForFrame_PedsCarsAndObjects = { 1.f, 1.f, 1.f, AmbientLightColourForFrame_PedsCarsAndObjects.alpha };
+            AmbientLightColourForFrame                    = { 1.f, 1.f, 1.f, AmbientLightColourForFrame.alpha };
         }
+
         RpLightSetColor(pAmbient, &AmbientLightColourForFrame);
     }
 
@@ -154,16 +154,16 @@ void SetLightsWithTimeOfDayColour(RpWorld* world) {
         DirectionalLightColourForFrame.blue  = color;
         RpLightSetColor(pDirect, &DirectionalLightColourForFrame);
 
-        CVector vecDir   = CTimeCycle::m_vecDirnLightToSun;
-        CVector vecUp    = CrossProduct(CVector(0, 0, 1), vecDir);
-        vecUp.Normalise();
-        CVector vecRight = CrossProduct(vecUp, vecDir);
+        const auto& dir  = CTimeCycle::m_vecDirnLightToSun;
+        const auto right = CVector::ZAxisVector().Cross(dir).Normalized(); // NOTE: I don't normalization is needed here
+        const auto up    = right.Cross(dir);
 
-        RwMatrix mxTransform;
-        mxTransform.right = vecRight;
-        mxTransform.up    = vecUp;
-        mxTransform.at    = -vecDir;
-        RwFrameTransform(RpLightGetFrame(pDirect), &mxTransform, rwCOMBINEREPLACE);
+        RwMatrix transform{ // RW has y and z swapped, so don't get confused
+            .right = up,
+            .up    = right,
+            .at    = -dir
+        };
+        RwFrameTransform(RpLightGetFrame(pDirect), &transform, rwCOMBINEREPLACE);
     }
 }
 
@@ -184,7 +184,44 @@ void WorldReplaceScorchedLightsWithNormal(RpWorld* world) {
 
 // 0x735840
 void AddAnExtraDirectionalLight(RpWorld* world, float x, float y, float z, float red, float green, float blue) {
-    ((void(__cdecl *)(RpWorld*, float, float, float, float, float, float))0x735840)(world, x, y, z, red, green, blue);
+    const float strength     = std::max({ red, green, blue });
+    const auto  numDirLights = CGame::CanSeeOutSideFromCurrArea() ? 4 : 6;
+
+    const auto slot = [&] {
+        if (numDirLights > NumExtraDirectionalLights) {
+            return NumExtraDirectionalLights;
+        }
+
+        // Android sets `msIdx` to -1, making `slot < 0` satisfiable.
+        int32 msIdx{};
+        float msValue{ strength };
+        for (const auto&& [i, s] : rngv::enumerate(LightStrengths)) {
+            if (msValue > s) {
+                msIdx = i;
+                msValue = s;
+            }
+        }
+        return msIdx;
+    }();
+
+    if (slot < 0) {
+        return;
+    }
+
+    RwRGBAReal color{ red, green, blue };
+    RpLightSetColor(pExtraDirectionals[slot], &color);
+
+    auto* frame = RpLightGetFrame(pExtraDirectionals[slot]);
+    auto* mat   = RwFrameGetMatrix(frame);
+    *RwMatrixGetAt(mat) = { -x, -y, -z };
+    RwMatrixUpdate(mat);
+    RwFrameUpdateObjects(frame);
+
+    // RpLightSetFlags "returns" the first arg, which is marked [[nodiscard]], so we have to use it.
+    (void)RpLightSetFlags(pExtraDirectionals[slot], rpLIGHTDIRECTIONAL);
+
+    LightStrengths[slot] = strength;
+    NumExtraDirectionalLights = std::min(NumExtraDirectionalLights + 1, numDirLights);
 }
 
 // 0x7359E0
@@ -192,7 +229,7 @@ void RemoveExtraDirectionalLights(RpWorld* world) {
     for (auto& light : pExtraDirectionals) {
         RpLightSetFlags(light, 0x0);
     }
-    numExtraDirectionalLights = 0;
+    NumExtraDirectionalLights = 0;
 }
 
 // fMult = [ 0.0f; 1.0f ]
@@ -273,9 +310,9 @@ void SetDirectionalColours(RwRGBAReal* color) {
 // unused
 // 0x735C90
 void SetAmbientColoursToIndicateRoadGroup(int32 idx) {
-    static uint8 (&IndicateR)[8] = *reinterpret_cast<uint8 (*)[8]>(0x8D60D0);
-    static uint8 (&IndicateG)[8] = *reinterpret_cast<uint8 (*)[8]>(0x8D60D8);
-    static uint8 (&IndicateB)[8] = *reinterpret_cast<uint8 (*)[8]>(0x8D60E0);
+    static auto& IndicateR = StaticRef<std::array<uint8, 8>>(0x8D60D0);
+    static auto& IndicateG = StaticRef<std::array<uint8, 8>>(0x8D60D8);
+    static auto& IndicateB = StaticRef<std::array<uint8, 8>>(0x8D60E0);
 
     AmbientLightColour.red   = (float)IndicateR[idx & std::size(IndicateR)] * (1.0f / 255.0f);
     AmbientLightColour.green = (float)IndicateG[idx & std::size(IndicateG)] * (1.0f / 255.0f);
@@ -286,7 +323,7 @@ void SetAmbientColoursToIndicateRoadGroup(int32 idx) {
 // unused
 // 0x735D10
 void SetFullAmbient() {
-    static RwRGBAReal& FullLight = *reinterpret_cast<RwRGBAReal*>(0x8D60C0); // { 1.0f, 1.0f, 1.0f, 1.0f }
+    static auto& FullLight = StaticRef<RwRGBAReal>(0x8D60C0); // { 1.0f, 1.0f, 1.0f, 1.0f }
     RpLightSetColor(pAmbient, &FullLight);
 }
 

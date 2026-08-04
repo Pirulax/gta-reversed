@@ -1,76 +1,92 @@
-// This is an open source non-commercial project. Dear PVS-Studio, please check it.
-
-// PVS-Studio Static Code Analyzer for C, C++, C#, and Java: https://pvs-studio.com
-
 #include "StdInc.h"
-
 #include "config.h"
+#include <cstdlib>
+
+#include "WinPlatform.h"
+#include "extensions/CommandLine.h"
+#include "extensions/debug.hpp"
+#include "extensions/Configuration.hpp"
+#include "reversiblehooks/RootHookCategory.h"
 
 void InjectHooksMain(HMODULE hThisDLL);
 
-void DisplayConsole()
-{
-    if (AllocConsole())
-    {
-        freopen("CONIN$", "r", stdin);
-        freopen("CONOUT$", "w", stdout);
-        freopen("CONOUT$", "w", stderr);
-    }
+static constexpr auto DEFAULT_INI_FILENAME = "gta-reversed.ini";
+
+#include "extensions/Configs/FastLoader.hpp"
+#include "extensions/Configs/Miscellaneous.hpp"
+
+void LoadConfigurations() {
+    // Firstly load the INI into the memory.
+    g_ConfigurationMgr.Load(DEFAULT_INI_FILENAME);
+
+    // Then load all specific configurations.
+    g_FastLoaderConfig.Load();
+    g_MiscConfig.Load();
+    // ...
 }
 
-void WaitForDebugger() {
-    while (!::IsDebuggerPresent()) {
-        printf("Debugger not present\n");
-        ::Sleep(100);
+static void ApplyCommandLineHookSettings() {
+    using namespace ReversibleHooks;
+
+    const auto ResultText = [](SetCatOrItemStateResult res) {
+        switch (res) {
+        case SetCatOrItemStateResult::NotFound: return "not found";
+        case SetCatOrItemStateResult::Locked:   return "locked";
+        case SetCatOrItemStateResult::Done:     return "done";
+        default:                                NOTSA_UNREACHABLE();
+        }
+    };
+
+    if (CommandLine::s_UnhookAll || !CommandLine::s_UnhookExcept.empty()) {
+        GetRootCategory().SetAllItemsEnabled(false);
+
+        NOTSA_LOG_DEBUG("Unhooked all via command-line");
+        for (const auto& item : CommandLine::s_UnhookExcept) {
+            const auto res = SetCategoryOrItemStateByPath(item, true);
+
+            if (res == SetCatOrItemStateResult::Done) {
+                NOTSA_LOG_DEBUG("Rehooked '{}' via command-line.", item);
+            } else {
+                NOTSA_LOG_WARN("Couldn't rehook '{}' via command-line: {}", item, ResultText(res));
+            }
+        }
+        return;
     }
-}
 
-namespace CommandLineArguments {
+    if (!CommandLine::s_UnhookSome.empty()) {
+        for (const auto& item : CommandLine::s_UnhookSome) {
+            const auto res = SetCategoryOrItemStateByPath(item, false);
 
-std::vector<std::wstring> Get() {
-    std::vector<std::wstring> out;
-    int numArgs{0};
-    LPWSTR* szArgs = CommandLineToArgvW(GetCommandLineW(), &numArgs);
-    out.reserve(numArgs);
-    if (szArgs) {
-        for (int i = 0; i < numArgs; i++) {
-            out.emplace_back(szArgs[i]);
+            if (res == SetCatOrItemStateResult::Done) {
+                NOTSA_LOG_DEBUG("Unhooked '{}' via command-line.", item);
+            } else {
+                NOTSA_LOG_WARN("Couldn't unhook '{}' via command-line: {}", item, ResultText(res));
+            }
         }
     }
-    LocalFree(szArgs);
-    return out;
 }
 
-void Process() {
-    using namespace std::literals;
-    const auto args = Get();
-    for (const auto& arg : args) {
-        if (arg == L"--debug") {
-            WaitForDebugger();
-        }
-    }
-}
-
-} // namespace CommandLineArguments
-
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD  ul_reason_for_call, LPVOID lpReserved)
-{
-    switch (ul_reason_for_call)
-    {
-    case DLL_PROCESS_ATTACH:
-    {
-        RwCamera * pRwCamera = *(RwCamera**)0xC1703C;
-
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
+    case DLL_PROCESS_ATTACH: {
         // Fail if RenderWare has already been started
-        if (pRwCamera)
-        {
+        if (*(RwCamera**)0xC1703C) {
             MessageBox(NULL, "gta_reversed failed to load (RenderWare has already been started)", "Error", MB_ICONERROR | MB_OK);
             return FALSE;
         }
 
-        DisplayConsole();
-        CommandLineArguments::Process();
+        std::setlocale(LC_ALL, "en_US.UTF-8");
+
+        notsa::debug::DisplayConsole();
+        CommandLine::Load(__argc, __argv);
+        if (CommandLine::s_WaitForDebugger) {
+            notsa::debug::WaitForDebugger();
+        }
+
+        LoadConfigurations();
+
         InjectHooksMain(hModule);
+        ApplyCommandLineHookSettings();
         break;
     }
     case DLL_THREAD_ATTACH:

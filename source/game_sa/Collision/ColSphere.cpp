@@ -78,7 +78,14 @@ bool CColSphere::IntersectPoint(const CVector& point) {
 }
 
 // 0x410090
-bool CColSphere::IntersectSphere(const CColSphere& right) {
+bool CColSphere::IntersectSphere(const CColSphere& right) const {
     CVector distance = m_vecCenter - right.m_vecCenter;
     return std::powf(m_fRadius + right.m_fRadius, 2.0f) > distance.SquaredMagnitude();
+}
+
+auto TransformObject(const CColSphere& sp, const CMatrix& transform) -> CColSphere {
+    return CColSphere{
+        TransformObject(static_cast<const CSphere&>(sp), transform),
+        sp.m_Surface
+    };
 }

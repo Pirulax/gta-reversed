@@ -1,7 +1,6 @@
 #include "StdInc.h"
 #include "Shopping.h"
 #include "PedClothesDesc.h"
-#include <extensions/enumerate.hpp>
 
 void CShopping::InjectHooks() {
     RH_ScopedClass(CShopping);
@@ -56,7 +55,7 @@ void CShopping::InjectHooks() {
 int32 GetChangingStatIndex(const char* stat) {
     static constexpr const char* statNames[] = {"fat", "respect", "sexy", "health", "stamina", "calories"};
 
-    // todo: use notsa::enumerate
+    // todo: use rngv::enumerate
     for (auto i = 0u; i < std::size(statNames); i++) {
         if (!strcmp(statNames[i], stat)) {
             return i;
@@ -100,7 +99,7 @@ void CShopping::Buy(uint32 key, int32 extraInfo) {
 
     const auto price = GetPrice(key);
     const auto fPrice = static_cast<float>(price);
-    const auto priceInfo = ms_prices[FindItem(key)];
+    const auto& priceInfo = ms_prices[FindItem(key)];
     playerInfo.m_nMoney -= price;
 
     for (const auto modifier : ms_statModifiers[index].modifiers) {
@@ -120,7 +119,7 @@ void CShopping::Buy(uint32 key, int32 extraInfo) {
             const auto car = veh->AsAutomobile();
 
             // todo: refactor
-            const auto carModId = upgradeModel->nCarmodId;
+            const auto carModId = upgradeModel->CarMod;
             auto parentId = vehModel->m_pVehicleStruct->m_aUpgrades[carModId].m_nParentComponentId;
             if (upgradeModel->bUsesVehDummy) {
                 parentId = carModId;
@@ -232,7 +231,7 @@ void CShopping::Buy(uint32 key, int32 extraInfo) {
  */
 int32 CShopping::FindItem(uint32 itemKey) {
     if (ms_numPrices >= 1) {
-        for (auto&& [i, p] : notsa::enumerate(std::span{ms_prices.data(), (size_t)ms_numPrices})) {
+        for (auto&& [i, p] : rngv::enumerate(std::span{ms_prices.data(), (size_t)ms_numPrices})) {
             if (p.key == itemKey) {
                 return i;
             }
@@ -255,11 +254,12 @@ bool CShopping::FindSection(FILESTREAM file, const char* sectionName) {
         if (*line == '\0' || *line == '#')
             continue;
 
+        char* nextToken{};
         if (!strncmp(line, "section", 7u)) {
             counter++;
-            RET_IGNORED(strtok(line, " \t"));
+            RET_IGNORED(strtok_s(line, " \t", &nextToken));
 
-            if (counter == 1 && !_stricmp(sectionName, strtok(nullptr, " \t"))) {
+            if (counter == 1 && !_stricmp(sectionName, strtok_s(nullptr, " \t", &nextToken))) {
                 return true;
             }
         } else if (!strncmp(line, "end", 3u) && --counter < 0) {
@@ -297,7 +297,7 @@ int32 CShopping::GetExtraInfo(uint32 itemKey, int32 index) {
  * @returns 'Absolute' index of the item
  */
 int32 CShopping::GetItemIndex(uint32 itemKey) {
-    for (const auto&& [i, key] : notsa::enumerate(ms_keys)) {
+    for (const auto&& [i, key] : rngv::enumerate(ms_keys)) {
         if (key == itemKey) {
             return i;
         }
@@ -359,8 +359,9 @@ const char* CShopping::GetNextSection(FILESTREAM file) {
         }
     }
 
-    RET_IGNORED(strtok(line, " \t"));
-    return strtok(nullptr, " \t");
+    char* lastToken{};
+    RET_IGNORED(strtok_s(line, " \t", &lastToken));
+    return strtok_s(nullptr, " \t", &lastToken);
 }
 
 // 0x49AD50
@@ -370,7 +371,7 @@ int32 CShopping::GetPrice(uint32 itemKey) {
 
 // 0x49AAD0
 ePriceSection CShopping::GetPriceSectionFromName(const char* name) {
-    for (const auto&& [i, sectionName] : notsa::enumerate(ms_sectionNames)) {
+    for (const auto&& [i, sectionName] : rngv::enumerate(ms_sectionNames)) {
         if (!_stricmp(name, sectionName)) {
             return static_cast<ePriceSection>(i);
         }
@@ -456,28 +457,29 @@ void CShopping::LoadPrices(const char* sectionName) {
 
         auto& priceInfo = ms_prices[ms_numPrices];
 
-        const auto model = strtok(line, " \t,");
+        char* lastToken{};
+        const auto model = strtok_s(line, " \t,", &lastToken);
         priceInfo.key = GetKey(model, ms_priceSectionLoaded);
 
-        const auto nameTag = strtok(nullptr, " \t,");
-        strncpy(priceInfo.nameTag, nameTag, 8u);
+        const auto nameTag = strtok_s(nullptr, " \t,", &lastToken);
+        strncpy_s(priceInfo.nameTag, nameTag, 8u);
 
         switch (ms_priceSectionLoaded) {
         case PRICE_SECTION_CLOTHES:
         case PRICE_SECTION_HAIRCUTS: {
-            priceInfo.clothes.modelKey = CKeyGen::GetUppercaseKey(strtok(nullptr, " \t,"));
-            priceInfo.clothes.type = std::atoi(strtok(nullptr, " \t,"));
+            priceInfo.clothes.modelKey = CKeyGen::GetUppercaseKey(strtok_s(nullptr, " \t,", &lastToken));
+            priceInfo.clothes.type = std::atoi(strtok_s(nullptr, " \t,", &lastToken));
             break;
         }
         case PRICE_SECTION_TATTOOS: {
-            const auto type = strtok(nullptr, " \t,");
-            const auto txtkey = strtok(nullptr, " \t,");
+            const auto type = strtok_s(nullptr, " \t,", &lastToken);
+            const auto txtkey = strtok_s(nullptr, " \t,", &lastToken);
             priceInfo.tattoos.type1 = (type[0] == '-') ? -1 : std::atoi(type);
             priceInfo.tattoos.texKey = CKeyGen::GetUppercaseKey(txtkey);
             break;
         }
         case PRICE_SECTION_WEAPONS: {
-            priceInfo.weapon.ammo = std::atoi(strtok(nullptr, " \t,"));
+            priceInfo.weapon.ammo = std::atoi(strtok_s(nullptr, " \t,", &lastToken));
             break;
         }
         default:
@@ -485,9 +487,9 @@ void CShopping::LoadPrices(const char* sectionName) {
         }
 
         for (auto i = 0; i < 4; i++)
-            RET_IGNORED(strtok(nullptr, " \t,"));
+            RET_IGNORED(strtok_s(nullptr, " \t,", &lastToken));
 
-        priceInfo.price = std::atoi(strtok(nullptr, " \t,"));
+        priceInfo.price = std::atoi(strtok_s(nullptr, " \t,", &lastToken));
         for (auto& priceModifier : ms_priceModifiers | rng::views::take((size_t)ms_numPriceModifiers)) {
             if (priceInfo.key == priceModifier.key) {
                 priceInfo.price = priceModifier.price;
@@ -535,13 +537,14 @@ void CShopping::LoadShop(const char* sectionName) {
             if (!strncmp(line, "end", 3u))
                 break;
 
-            const auto type = strtok(line, " \t");
+            char* lastToken{};
+            const auto type = strtok_s(line, " \t", &lastToken);
             if (!strcmp("type", type)) {
-                strcpy_s(sectionName, strtok(nullptr, " \t"));
+                strcpy_s(sectionName, strtok_s(nullptr, " \t", &lastToken));
                 LoadPrices(sectionName);
             } else if (!strcmp("item", type)) {
                 const auto veh = FindPlayerVehicle();
-                const auto model = GetKey(strtok(nullptr, " \t"), ms_priceSectionLoaded);
+                const auto model = GetKey(strtok_s(nullptr, " \t", &lastToken), ms_priceSectionLoaded);
 
                 if (ms_priceSectionLoaded != PRICE_SECTION_CAR_MODS || IsValidModForVehicle(model, veh)) {
                     ms_shopContents[ms_numItemsInShop++] = model;
@@ -567,19 +570,21 @@ void CShopping::LoadStats() {
             if (!strncmp(line, "end", 3u))
                 break;
 
-            ms_keys[ms_numBuyableItems] = GetKey(strtok(line, " \t,"), section);
+            char* lastToken{};
+            ms_keys[ms_numBuyableItems] = GetKey(strtok_s(line, " \t,", &lastToken), section);
             ms_bHasBought[ms_numBuyableItems] = false;
-            RET_IGNORED(strtok(nullptr, " \t,"));
+
+            RET_IGNORED(strtok_s(nullptr, " \t,", &lastToken));
 
             switch (section) {
             case PRICE_SECTION_CLOTHES:
             case PRICE_SECTION_HAIRCUTS:
             case PRICE_SECTION_TATTOOS:
-                RET_IGNORED(strtok(nullptr, " \t,"));
+                RET_IGNORED(strtok_s(nullptr, " \t,", &lastToken));
                 [[fallthrough]];
 
             case PRICE_SECTION_WEAPONS:
-                RET_IGNORED(strtok(nullptr, " \t,"));
+                RET_IGNORED(strtok_s(nullptr, " \t,", &lastToken));
                 break;
             default:
                 break;
@@ -587,8 +592,8 @@ void CShopping::LoadStats() {
 
             for (auto& modifier : ms_statModifiers[ms_numBuyableItems].modifiers) {
                 modifier = {
-                    (int8)GetChangingStatIndex(strtok(nullptr, " \t,")),
-                    (int8)std::atoi(strtok(nullptr, " \t,"))
+                    (int8)GetChangingStatIndex(strtok_s(nullptr, " \t,", &lastToken)),
+                    (int8)std::atoi(strtok_s(nullptr, " \t,", &lastToken))
                 };
             }
 
@@ -648,7 +653,7 @@ void CShopping::RemovePriceModifier(uint32 key) {
     if (ms_numPriceModifiers <= 0)
         return;
 
-    for (const auto&& [i, priceMod] : notsa::enumerate(std::span{ms_priceModifiers.data(), (size_t)ms_numPriceModifiers})) {
+    for (const auto&& [i, priceMod] : rngv::enumerate(std::span{ms_priceModifiers.data(), (size_t)ms_numPriceModifiers})) {
         if (key == priceMod.key) {
             ms_numPriceModifiers--;
             if (ms_numPriceModifiers >= 1u) {
@@ -673,7 +678,7 @@ void CShopping::StoreVehicleMods() {
         return;
 
     const auto& damage = veh->AsAutomobile()->m_damageManager;
-    for (const auto& [i, state] : notsa::enumerate(gComponentDamageState)) {
+    for (const auto& [i, state] : rngv::enumerate(gComponentDamageState)) {
         switch (i) {
         case 2:
             state = (eDamageState)damage.GetWheelStatus(CAR_WHEEL_FRONT_RIGHT);
@@ -717,7 +722,7 @@ void CShopping::RestoreClothesState() {
 void CShopping::RestoreVehicleMods() {
     const auto veh = FindPlayerVehicle();
 
-    for (auto&& [i, storedMod] : notsa::enumerate(gStoredVehicleMods)) {
+    for (auto&& [i, storedMod] : rngv::enumerate(gStoredVehicleMods)) {
         auto& upgrade = veh->m_anUpgrades[i];
 
         if (upgrade != -1) {
@@ -741,7 +746,7 @@ void CShopping::RestoreVehicleMods() {
         return;
 
     auto& damage = veh->AsAutomobile()->m_damageManager;
-    for (const auto& [i, state] : notsa::enumerate(gComponentDamageState)) {
+    for (const auto& [i, state] : rngv::enumerate(gComponentDamageState)) {
         if (state == DAMAGE_STATE_OK)
             continue;
 
@@ -790,22 +795,22 @@ void CShopping::UpdateStats(size_t index, bool increment) {
 
 // 0x5D3E40
 void CShopping::Load() {
-    CGenericGameStorage::LoadDataFromWorkBuffer(&ms_numPriceModifiers, sizeof(int32));
+    CGenericGameStorage::LoadDataFromWorkBuffer(ms_numPriceModifiers);
     for (auto i = 0; i < ms_numPriceModifiers; i++) {
-        CGenericGameStorage::LoadDataFromWorkBuffer(&ms_priceModifiers[i], sizeof(PriceModifier));
+        CGenericGameStorage::LoadDataFromWorkBuffer(ms_priceModifiers[i]);
     }
 
-    CGenericGameStorage::LoadDataFromWorkBuffer(&ms_numBuyableItems, sizeof(uint32));
-    CGenericGameStorage::LoadDataFromWorkBuffer(&ms_bHasBought, ms_numBuyableItems);
+    CGenericGameStorage::LoadDataFromWorkBuffer(ms_numBuyableItems);
+    CGenericGameStorage::LoadDataFromWorkBuffer(&ms_bHasBought, ms_numBuyableItems); // TODO: This looks funky, check if we don't have a bug on our hands
 }
 
 // 0x5D3DE0
 void CShopping::Save() {
-    CGenericGameStorage::SaveDataToWorkBuffer(&ms_numPriceModifiers, sizeof(int32));
+    CGenericGameStorage::SaveDataToWorkBuffer(ms_numPriceModifiers);
     for (auto i = 0; i < ms_numPriceModifiers; i++) {
-        CGenericGameStorage::SaveDataToWorkBuffer(&ms_priceModifiers[i], sizeof(PriceModifier));
+        CGenericGameStorage::SaveDataToWorkBuffer(ms_priceModifiers[i]);
     }
 
-    CGenericGameStorage::SaveDataToWorkBuffer(&ms_numBuyableItems, sizeof(uint32));
-    CGenericGameStorage::SaveDataToWorkBuffer(&ms_bHasBought, ms_numBuyableItems);
+    CGenericGameStorage::SaveDataToWorkBuffer(ms_numBuyableItems);
+    CGenericGameStorage::SaveDataToWorkBuffer(&ms_bHasBought, ms_numBuyableItems); // TODO: This looks funky, check if we don't have a bug on our hands
 }

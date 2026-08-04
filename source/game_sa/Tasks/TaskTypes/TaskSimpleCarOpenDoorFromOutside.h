@@ -14,11 +14,15 @@ class NOTSA_EXPORT_VTABLE CTaskSimpleCarOpenDoorFromOutside : public CTaskSimple
 public:
     bool m_finished = {};                            // 0x8
     CAnimBlendAssociation* m_anim = {};              // 0xC
+
     CVehicle* m_veh = {};                            // 0x10
     int32 m_door = {};                               // 0x14
+
     bool m_disallowPlayerDriverToExitCar = {};       // 0x18
-    bool m_hasSetPlayerCanExitCarFlag = {};             // 0x19
+    bool m_hasSetPlayerCanExitCarFlag = {};          // 0x19
+
     CTaskUtilityLineUpPedWithCar* m_lineUpTask = {}; // 0x1C
+
     float m_doorOpenAngleRatio = {};                 // 0x20
 
 public:
@@ -34,12 +38,12 @@ public:
 
     void ComputeAnimID_ToHook(AssocGroupId& grp, AnimationId& id);
     auto ComputeAnimID() -> std::pair<AssocGroupId, AnimationId>;
-    void StartAnim(CPed* ped);
+    void StartAnim(const CPed* ped);
     void IfNotAlreadySetPlayerCanExitCarFlag(); // NOTSA?
 
-    CTask* Clone() override { return new CTaskSimpleCarOpenDoorFromOutside{ *this }; }
-    eTaskType GetTaskType() override { return Type; }
-    bool MakeAbortable(CPed* ped, eAbortPriority priority, CEvent const* event) override;
+    CTask* Clone() const override { return new CTaskSimpleCarOpenDoorFromOutside{ *this }; }
+    eTaskType GetTaskType() const override { return Type; }
+    bool MakeAbortable(CPed* ped, eAbortPriority priority = ABORT_PRIORITY_URGENT, const CEvent* event = nullptr) override;
     bool ProcessPed(CPed* ped) override;
     bool SetPedPosition(CPed* ped) override;
 

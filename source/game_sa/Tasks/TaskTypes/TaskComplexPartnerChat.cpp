@@ -3,7 +3,7 @@
 #include "TaskComplexPartnerChat.h"
 
 void CTaskComplexPartnerChat::InjectHooks() {
-    RH_ScopedClass(CTaskComplexPartnerChat);
+    RH_ScopedVirtualClass(CTaskComplexPartnerChat, 0x8707C4, 14);
     RH_ScopedCategory("Tasks/TaskTypes");
     RH_ScopedInstall(Constructor, 0x684290);
 }
@@ -19,7 +19,7 @@ CTaskComplexPartnerChat::CTaskComplexPartnerChat(const char* commandName, CPed* 
         m_updateDirectionCount = 4;
     }
     field_75 = a8;
-    strcpy(m_commandName, commandName);
+    strcpy_s(m_commandName, commandName);
 }
 
 // 0x684320

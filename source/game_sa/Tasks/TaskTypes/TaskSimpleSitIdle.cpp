@@ -1,6 +1,6 @@
 #include "StdInc.h"
 #include "TaskSimpleSitIdle.h"
-#include "IKChainManager_c.h"
+#include "Ragdoll/IKChainManager.h"
 
 void CTaskSimpleSitIdle::InjectHooks() {
     RH_ScopedVirtualClass(CTaskSimpleSitIdle, 0x86df18, 9);
@@ -33,7 +33,7 @@ CTaskSimpleSitIdle::CTaskSimpleSitIdle(const CTaskSimpleSitIdle& o) :
 void CTaskSimpleSitIdle::StartAnim(CPed* ped) {
     m_animStartedTimer.Start(m_durationMs);
 
-    const auto StartAnim = [this, ped](auto grpId, auto animId) { m_anim = CAnimManager::BlendAnimation(ped->m_pRwClump, grpId, animId, 256.f); };
+    const auto StartAnim = [this, ped](auto grpId, auto animId) { m_anim = CAnimManager::BlendAnimation(ped->GetRpClump(), grpId, animId, 256.f); };
     if (m_bSitAfterStep) {
         StartAnim(ANIM_GROUP_ATTRACTORS, ANIM_ID_STEPSIT_LOOP);
     } else {
@@ -41,7 +41,7 @@ void CTaskSimpleSitIdle::StartAnim(CPed* ped) {
     }
 
     if (m_anim) {
-        m_anim->m_fSpeed = CGeneral::GetRandomNumberInRange(0.9f, 1.5f);
+        m_anim->m_Speed = CGeneral::GetRandomNumberInRange(0.9f, 1.5f);
     }
 }
 
@@ -50,7 +50,7 @@ bool CTaskSimpleSitIdle::MakeAbortable(CPed* ped, eAbortPriority priority, CEven
     switch (priority) {
     case ABORT_PRIORITY_IMMEDIATE: {
         if (m_anim) {
-            m_anim->m_fBlendDelta = -1000.f;
+            m_anim->m_BlendDelta = -1000.f;
             m_anim->SetDefaultFinishCallback();
         }
         g_ikChainMan.AbortLookAt(ped, 750); // Omitted redudant `IsLooking` check.
@@ -70,7 +70,7 @@ bool CTaskSimpleSitIdle::ProcessPed(CPed* ped) {
     }
 
     // Do look at somewhere/another ped with random chance
-    if (!g_ikChainMan.IsLooking(ped) && CGeneral::RandomBool(5)) {
+    if (!g_ikChainMan.IsLooking(ped) && CGeneral::RandomBool(5.f)) {
         const auto lookTime = CGeneral::GetRandomNumberInRange(3000, 5000);
 
         // First try looking at the closest ped (if any)
@@ -79,7 +79,7 @@ bool CTaskSimpleSitIdle::ProcessPed(CPed* ped) {
             if (!closestPed) {
                 return false;
             }
-            if (!CGeneral::RandomBool(25)) { // Moved this early out here to optimize
+            if (!CGeneral::RandomBool(25.f)) { // Moved this early out here to optimize
                 return false;
             }
             if (DotProduct(closestPed->GetPosition() - ped->GetPosition(), ped->GetForwardVector()) <= 0.2f) { // Must be in cone of [-78, 78] deg in front of `ped`

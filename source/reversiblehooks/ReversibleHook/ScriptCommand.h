@@ -2,38 +2,37 @@
 
 #include "Base.h"
 #include "eScriptCommands.h"
-#include "Scripts/CommandParser/LUTGenerator.hpp"
+#include "RunningScript.h"
 
-#ifdef ENABLE_SCRIPT_COMMAND_HOOKS
+#ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
 namespace ReversibleHooks {
 namespace ReversibleHook {
-template<eScriptCommands Command>
 struct ScriptCommand : Base {
-    ScriptCommand(bool locked = false, bool enabledByDefault = true) :
-        Base{ std::string{::notsa::script::GetScriptCommandName(Command)}, Base::HookType::ScriptCommand, locked }
+    ScriptCommand(eScriptCommands command, bool reversed = true, bool enabledByDefault = true) :
+        Base{ std::string{::notsa::script::GetScriptCommandName(command)}, Base::HookType::ScriptCommand, reversed },
+        m_cmd{command},
+        m_originalHandler{CRunningScript::CustomCommandHandlerOf(command)}
     {
-        Switch(); // Install hook
-
-        if (!enabledByDefault) {
-            Switch(); // Uninstall
+        m_IsHooked = true; // Enabled by default
+        if (m_IsHooked && !enabledByDefault) {
+            Switch(); // Uninstall it
         }
     }
+
     ~ScriptCommand() override = default;
 
     void Switch() override {
         using namespace ::notsa::script;
 
-        m_bIsHooked = !m_bIsHooked;
-        CRunningScript::SetCommandHandler(
-            Command,
-            m_bIsHooked
-                ? GetHandlerOfCommand<Command>() // When hooked use custom handler (Which might still fallback to the GTA handler in case we have no custom handler)
-                : &GTAProcessCommand<Command>    // When unhooked use GTA handler
-        );
+        m_IsHooked = !m_IsHooked;
+        CRunningScript::CustomCommandHandlerOf(m_cmd) = m_IsHooked ? m_originalHandler : nullptr;
     }
 
     void        Check() override { /* nop */ }
     const char* Symbol() const override { return "C"; }
+private:
+    eScriptCommands                         m_cmd{};
+    ::notsa::script::CommandHandlerFunction m_originalHandler{};
 };
 };
 };
