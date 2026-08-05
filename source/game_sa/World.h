@@ -369,6 +369,89 @@ public:
         );
     }
 
+    /*!
+     * @brief Iterates over sectors intersected by a line segment, invoking a visitor function for each sector.
+     * @note  Iteration always goes from lower to higher sector coordinates, *not* from endpoints a -> b
+     *
+     * @param a Endpoint A of the line segment.
+     * @param b Endpoint B of the line segment.
+     * @param visitor A callable object invoked for each sector coordinate pair (x, y). Should return false to stop iteration early, true to continue.
+     *
+     * @return Returns true if all sectors were visited successfully, false if iteration was stopped early by the visitor returning false.
+     */
+    template<std::predicate<int32, int32> Visitor>
+    static bool IterateSectorsAlongLine(CVector a, CVector b, const Visitor& visitor) {
+        const auto [minX, maxX] = std::minmax(a.x, b.x);
+        const auto minSectorX   = GetSectorX(minX);
+        const auto maxSectorX   = GetSectorX(maxX);
+
+        const auto [minY, maxY] = std::minmax(a.y, b.y);
+        const auto minSectorY   = GetSectorY(minY);
+        const auto maxSectorY   = GetSectorY(maxY);
+
+        /* Both in the same sector, check only that sector */
+        if (minSectorX == maxSectorX && minSectorY == maxSectorY) {
+            return std::invoke(visitor, minSectorX, minSectorY);
+        }
+
+        /* Same X for both, iterate along Y */
+        const auto IterateSectorsAlongY = [visitor](int32 x, int32 minY, int32 maxY) {
+            for (auto y = minY; y <= maxY; y++) {
+                if (!std::invoke(visitor, x, y)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (minSectorX == maxSectorX) {
+            return IterateSectorsAlongY(minSectorX, minSectorY, maxSectorY);
+        }
+
+        /* Same Y for both, iterate along X */
+        const auto IterateSectorsAlongX = [visitor](int32 minX, int32 maxX, int32 y) {
+            for (auto x = minX; x <= maxX; x++) {
+                if (!std::invoke(visitor, x, y)) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        if (minSectorY == maxSectorY) {
+            return IterateSectorsAlongX(minSectorX, maxSectorX, minSectorY);
+        }
+
+        /**
+         * Different X and Y, iterate sectors along the line
+         **/
+
+        /* Walk sectors along the Y axis, beginning at the previous Y up-to the passed-in `y`  */
+        auto IterateSectorsAlongYFromPreviousToCurrent = [IterateSectorsAlongY, currY = minSectorY](int32 x, int32 y) mutable {
+            const auto prevY = std::exchange(currY, y);
+            IterateSectorsAlongY(
+                x,
+                prevY,
+                currY
+            );
+        };
+
+        /* Get sector Y along the line at a given X */
+        const auto GetSectorYAlongLineAtX = [a, slope = std::abs((b.y - a.y) / (b.x - a.x))](int32 x) {
+            return GetSectorY(a.y + (GetSectorPosX(x) - a.x) * slope);
+        };
+
+        /* Iterate sectors [min, max) along the line */
+        for (int32 x = minSectorX; x < maxSectorX; x++) {
+            IterateSectorsAlongYFromPreviousToCurrent(x, GetSectorYAlongLineAtX(x + 1));
+        }
+
+        /* Now check the last sector separately, as we already know it's `Y` coordinate (to need to derive it from the line's slope )*/
+        IterateSectorsAlongYFromPreviousToCurrent(maxSectorX, maxSectorY);
+
+        /* All invocations of `visitor` have returned true */
+        return true;
+    }
+
+
     /*
     * @brief Call `fn` with the `x, y` grid position of all lod sectors that are overlapped by the rect
     *
