@@ -399,7 +399,7 @@ void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
             break;
         }
         case RH::ReversibleHook::BaseHook::HookType::Virtual: {
-            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::Virtual>(item));
+            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::VirtualHook>(item));
             break;
         }
         }

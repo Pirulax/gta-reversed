@@ -85,7 +85,7 @@ void InstallVirtual(
 ) {
     const auto idx = vmtInfoGTA.FindIndexOf(fnAddressGTA);
     // We can't do `vmtInfoOur.FindIndexOf(fnAddressOur)` because `fnAddressOur` points to the thunk, while the address in the VMT is pointing to the actual function
-    auto item = std::make_shared<ReversibleHook::Virtual>(
+    auto item = std::make_shared<ReversibleHook::VirtualHook>(
         std::move(fnName),
         vmtInfoOur.GetEntryAddressAt(idx),
 #ifdef NOTSA_STANDALONE
@@ -126,7 +126,7 @@ void WriteHooksToFile(const std::filesystem::path& file) {
                 const auto address = [&] {
                     switch (item->Type()) {
                     case BaseHook::HookType::Virtual:
-                        return std::static_pointer_cast<Virtual>(item)->GetHookGTAAddress();
+                        return std::static_pointer_cast<VirtualHook>(item)->GetHookGTAAddress();
                     case BaseHook::HookType::Basic:
                         return std::static_pointer_cast<BasicHook>(item)->GetHookGTAAddress();
                     default:

@@ -16,7 +16,7 @@ namespace ReversibleHook {
 /*!
  * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
  */
-struct Virtual : public BaseHook {
+struct VirtualHook : public BaseHook {
     /*!
      * @brief Constructor for hooking virtual functions where the direct call and virtual functions are the same (So basically all virtual functions other than destructors)
      * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
@@ -24,7 +24,7 @@ struct Virtual : public BaseHook {
      * @param fnVMTEntryGTA Pointer to GTA's VMT entry of the function (eg.: `&vmt[index]`)
      * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
-    Virtual(
+    VirtualHook(
         std::string_view name,
         void**           fnVMTEntryOur,
         void**           fnVMTEntryGTA,
@@ -40,7 +40,7 @@ struct Virtual : public BaseHook {
      * @param fnAddressGTA Address of GTA function (eg.: &Class::VirtualFunction)
      * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
-    Virtual(
+    VirtualHook(
         std::string_view name,
         void**           fnVMTEntryOur,
         void*            fnAddressOur,
@@ -48,7 +48,7 @@ struct Virtual : public BaseHook {
         void*            fnAddressGTA,
         bool             reversed = true
     );
-    ~Virtual() override = default;
+    ~VirtualHook() override = default;
 
     void        Switch() override;
     void        Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }

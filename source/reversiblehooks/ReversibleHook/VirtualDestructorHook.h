@@ -13,7 +13,7 @@ namespace ReversibleHook {
  */
 template<typename T>
     requires std::is_class_v<T>
-struct VirtualDestructorHook final : public Virtual {
+struct VirtualDestructorHook final : public VirtualHook {
 private:
     static constexpr auto DESTRUCTOR_VMT_INDEX = 0;
 public:
@@ -30,7 +30,7 @@ public:
         void*            fnAddressGTA,
         bool             reversed = true
     ) :     
-        Virtual{  
+        VirtualHook{  
             "Destructor",
             vmtInfoOur.GetEntryAddressAt(DESTRUCTOR_VMT_INDEX),
             Utility::GetScalarDestructorAddress<T>(),
