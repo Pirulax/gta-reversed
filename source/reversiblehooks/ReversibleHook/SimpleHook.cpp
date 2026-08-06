@@ -2,11 +2,11 @@
 #include <extensions/CommandLine.h>
 
 #include <reversiblehooks/HooksUtility.hpp>
-#include "SimpleHook.h"
+#include "BasicHook.h"
 
 namespace ReversibleHooks{
 namespace ReversibleHook{
-Simple::Simple(
+BasicHook::BasicHook(
     std::string name,
     uint32 installAddress,
     void* addressToJumpTo,
@@ -14,7 +14,7 @@ Simple::Simple(
     int iJmpCodeSize,
     int stackArguments
 ) :
-    BaseHook{ std::move(name), HookType::Simple, reversed },
+    BaseHook{ std::move(name), HookType::Basic, reversed },
     m_iLibFunctionAddress((uint32)addressToJumpTo),
     m_iRealHookedAddress(installAddress),
     m_iHookedBytes(iJmpCodeSize)
@@ -83,7 +83,7 @@ Simple::Simple(
     VirtualProtect((void*)installAddress, maxBytesToProtect, dwProtect[0], &dwProtect[1]);
 }
 
-Simple::~Simple() {
+BasicHook::~BasicHook() {
     if (m_HasAllocatedThunk) {
         VERIFY(VirtualFree((void*)(m_iLibFunctionAddress), 0, MEM_RELEASE));
     }
@@ -96,7 +96,7 @@ Simple::~Simple() {
 // Whenever a function is edited the compiler changes the `jmp` address
 // thus, what we've stored as `m_LibOriginalFunctionContent` has changed.
 // So, here we check if thats the case, and update `m_LibOriginalFunctionContent` if necessary
-bool Simple::CheckLibFnForChangesAndStore(void* expected) {
+bool BasicHook::CheckLibFnForChangesAndStore(void* expected) {
     if (memcmp((void*)m_iLibFunctionAddress, expected, m_iLibHookedBytes) != 0) {
         memcpy(&m_LibOriginalFunctionContent, (void*)m_iLibFunctionAddress, m_iLibHookedBytes);
         return true;
@@ -104,7 +104,7 @@ bool Simple::CheckLibFnForChangesAndStore(void* expected) {
     return false;
 }
 
-void Simple::ApplyJumpToGTACode() {
+void BasicHook::ApplyJumpToGTACode() {
     Utility::VirtualCopy((void*)m_iLibFunctionAddress, (void*)&m_LibHookContent, m_iLibHookedBytes);
 }
 
@@ -121,7 +121,7 @@ void Simple::ApplyJumpToGTACode() {
  * Also, each thunk allocates a new page. This is not memory-friendly, but hopefully there won't be
  * many functions that will need this workaround.
  */
-void Simple::GenerateECXPreservationThunk(int stackArguments)
+void BasicHook::GenerateECXPreservationThunk(int stackArguments)
 {
     assert(!m_HasAllocatedThunk);
 
@@ -165,7 +165,7 @@ void Simple::GenerateECXPreservationThunk(int stackArguments)
     m_iLibFunctionAddress = (uint32)pThunk; // redirect to our newly-generated thunk instead
 }
 
-void Simple::Switch()
+void BasicHook::Switch()
 {
     using namespace ReversibleHooks::detail;
     if (m_IsLocked) {
@@ -183,7 +183,7 @@ void Simple::Switch()
     m_IsHooked = !m_IsHooked;
 }
 
-void Simple::Check() {
+void BasicHook::Check() {
 #ifndef NOTSA_STANDALONE
     if (m_IsHooked) {
         CheckLibFnForChangesAndStore((void*)m_LibOriginalFunctionContent);

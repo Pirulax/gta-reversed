@@ -6,7 +6,7 @@
 #include <string>
 
 #include <reversiblehooks/ReversibleHook/BaseHook.h>
-#include <reversiblehooks/ReversibleHook/SimpleHook.h>
+#include <reversiblehooks/ReversibleHook/BasicHook.h>
 
 namespace ReversibleHooks {
 namespace ReversibleHook {

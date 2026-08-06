@@ -4,7 +4,7 @@
 #include "HooksDebugModule.h"
 #include "Utility.h"
 #include <reversiblehooks/ReversibleHook/BaseHook.h>
-#include <reversiblehooks/ReversibleHook/SimpleHook.h>
+#include <reversiblehooks/ReversibleHook/BasicHook.h>
 #include <reversiblehooks/ReversibleHook/VirtualHook.h>
 
 #include <imgui.h>
@@ -394,8 +394,8 @@ void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
         };
 
         switch (item->Type()) {
-        case RH::ReversibleHook::BaseHook::HookType::Simple: {
-            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::Simple>(item));
+        case RH::ReversibleHook::BaseHook::HookType::Basic: {
+            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::BasicHook>(item));
             break;
         }
         case RH::ReversibleHook::BaseHook::HookType::Virtual: {

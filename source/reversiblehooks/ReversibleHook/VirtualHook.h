@@ -6,7 +6,7 @@
 #include <string>
 
 #include "BaseHook.h"
-#include "SimpleHook.h"
+#include "BasicHook.h"
 #include "VMTRedirectHook.h"
 
 #include <reversiblehooks/VMTInfo.h>
@@ -58,7 +58,7 @@ struct Virtual : public BaseHook {
     auto        GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
 
 private:
-    Simple      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
+    BasicHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
     VMTRedirect m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
 };
 }; // namespace ReversibleHook

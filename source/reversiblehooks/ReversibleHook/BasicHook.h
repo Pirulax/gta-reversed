@@ -1,5 +1,7 @@
 #pragma once 
 
+#include <Base.h>
+
 #include "BaseHook.h"
 
 namespace ReversibleHooks{
@@ -14,7 +16,10 @@ struct SHookContent {
 #pragma pack(pop)
 VALIDATE_SIZE(SHookContent, 0x34);
 
-struct Simple : BaseHook {
+/*!
+ * @brief Basic hook that inserts a `jmp` at the hooked function and redirects it
+ */
+struct BasicHook : BaseHook {
     // TODO: Refactor this copy-paste and document it
 
     SHookContent m_HookContent{};
@@ -29,7 +34,7 @@ struct Simple : BaseHook {
 
     bool         m_HasAllocatedThunk{}; //!< If we allocated a thunk for this hook (See @ref GenerateECXPreservationThunk)
 
-    Simple(
+    BasicHook(
         std::string name,
         uint32 installAddress,
         void* addressToJumpTo,
@@ -38,7 +43,7 @@ struct Simple : BaseHook {
         int stackArguments = -1
     );
 
-    ~Simple() override;
+    ~BasicHook() override;
 
     bool CheckLibFnForChangesAndStore(void* expected);
     void ApplyJumpToGTACode();

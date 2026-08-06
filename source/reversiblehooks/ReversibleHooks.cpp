@@ -6,7 +6,7 @@
 #include "ReversibleHook/ScriptCommandHook.h"
 #endif
 #include "ReversibleHooks.h"
-#include "ReversibleHook/SimpleHook.h"
+#include "ReversibleHook/BasicHook.h"
 #include "ReversibleHook/VirtualHook.h"
 #include "RootHookCategory.h"
 #include "VMTInfo.h"
@@ -127,8 +127,8 @@ void WriteHooksToFile(const std::filesystem::path& file) {
                     switch (item->Type()) {
                     case BaseHook::HookType::Virtual:
                         return std::static_pointer_cast<Virtual>(item)->GetHookGTAAddress();
-                    case BaseHook::HookType::Simple:
-                        return std::static_pointer_cast<Simple>(item)->GetHookGTAAddress();
+                    case BaseHook::HookType::Basic:
+                        return std::static_pointer_cast<BasicHook>(item)->GetHookGTAAddress();
                     default:
                         NOTSA_UNREACHABLE();
                     }
@@ -166,7 +166,7 @@ void HookInstall(std::string_view category, std::string fnName, void* installAdd
     }
 #endif
 
-    auto item = std::make_shared<ReversibleHook::Simple>(
+    auto item = std::make_shared<ReversibleHook::BasicHook>(
         std::move(fnName),
         (uint32)installAddress,
         addressToJumpTo,

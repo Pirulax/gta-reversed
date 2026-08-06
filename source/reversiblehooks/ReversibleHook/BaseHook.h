@@ -15,7 +15,7 @@ constexpr auto GetFunctionLocationFromJMP(uint32 dwJmpLoc, uint32 dwJmpOffset) {
 namespace ReversibleHook {
 struct BaseHook {
     enum class HookType { // Sadly can't use `Type` alone as it's some function..
-        Simple,
+        Basic,
         Virtual,
         ScriptCommand,
         VMTRedirect,
