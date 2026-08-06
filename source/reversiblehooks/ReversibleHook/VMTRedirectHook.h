@@ -14,7 +14,7 @@ namespace ReversibleHook {
  * @brief Redirects calls to a function in the VMT to our own function, and vice versa.
  * @note Only modifies the VMT entries, doesn't handle direct calls to the function (eg.: `CEntity::Add`).
  */
-struct VMTRedirect : public Base {
+struct VMTRedirect : public BaseHook {
 public:
     VMTRedirect(
         std::string name,

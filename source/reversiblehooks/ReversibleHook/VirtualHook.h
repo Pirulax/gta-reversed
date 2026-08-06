@@ -16,7 +16,7 @@ namespace ReversibleHook {
 /*!
  * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
  */
-struct Virtual : public Base {
+struct Virtual : public BaseHook {
     /*!
      * @brief Constructor for hooking virtual functions where the direct call and virtual functions are the same (So basically all virtual functions other than destructors)
      * @param name Name of the function (eg.: `Add` for `CEntity::Add`)

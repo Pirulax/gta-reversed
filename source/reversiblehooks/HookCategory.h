@@ -14,7 +14,7 @@ namespace rng = std::ranges;
 namespace ReversibleHooks {
 class HookCategory {
 public:
-    using Item = std::shared_ptr<ReversibleHook::Base>;
+    using Item = std::shared_ptr<ReversibleHook::BaseHook>;
     using HooksState = ImGui::ImTristate; // Don't really want to deal with enum conversions so this should do.
     //enum class HooksState {
     //    ALL  = 1, // All hooked

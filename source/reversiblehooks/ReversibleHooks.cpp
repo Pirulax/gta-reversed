@@ -100,7 +100,7 @@ void InstallVirtual(
     AddItemToCategory(category, std::move(item));
 }
 
-void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::Base> item) {
+void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::BaseHook> item) {
     s_RootCategory.AddItemToNamedCategory(category, std::move(item));
 }
 
@@ -120,14 +120,14 @@ void WriteHooksToFile(const std::filesystem::path& file) {
         s_RootCategory.ForEachCategory([&](const HookCategory& cat) {
             using namespace ReversibleHook;
             for (const auto& item : cat.Items()) {
-                if (item->Type() == Base::HookType::ScriptCommand) {
+                if (item->Type() == BaseHook::HookType::ScriptCommand) {
                     continue;
                 }
                 const auto address = [&] {
                     switch (item->Type()) {
-                    case Base::HookType::Virtual:
+                    case BaseHook::HookType::Virtual:
                         return std::static_pointer_cast<Virtual>(item)->GetHookGTAAddress();
-                    case Base::HookType::Simple:
+                    case BaseHook::HookType::Simple:
                         return std::static_pointer_cast<Simple>(item)->GetHookGTAAddress();
                     default:
                         NOTSA_UNREACHABLE();

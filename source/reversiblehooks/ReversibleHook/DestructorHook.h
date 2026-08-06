@@ -16,7 +16,7 @@ namespace ReversibleHook {
 /*!
  * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
  */
-struct VirtualDestructor : public Base {
+struct VirtualDestructor : public BaseHook {
     /*!
      * @brief Constructor
      * @param vmtInfoOur Our VMT's info

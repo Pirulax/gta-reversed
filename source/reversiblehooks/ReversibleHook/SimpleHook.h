@@ -14,7 +14,7 @@ struct SHookContent {
 #pragma pack(pop)
 VALIDATE_SIZE(SHookContent, 0x34);
 
-struct Simple : Base {
+struct Simple : BaseHook {
     // TODO: Refactor this copy-paste and document it
 
     SHookContent m_HookContent{};

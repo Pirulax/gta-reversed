@@ -14,7 +14,7 @@ Simple::Simple(
     int iJmpCodeSize,
     int stackArguments
 ) :
-    Base{ std::move(name), HookType::Simple, reversed },
+    BaseHook{ std::move(name), HookType::Simple, reversed },
     m_iLibFunctionAddress((uint32)addressToJumpTo),
     m_iRealHookedAddress(installAddress),
     m_iHookedBytes(iJmpCodeSize)

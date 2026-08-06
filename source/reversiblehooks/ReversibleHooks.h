@@ -139,7 +139,7 @@ namespace ReversibleHooks {
     * @param category Category's path, eg.: "Global/"
     * @param item     Item to add
     */
-    void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::Base> item);
+    void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::BaseHook> item);
 
     namespace detail {
         void HookInstall(std::string_view category, std::string fnName, void* installAddress, void* addressToJumpTo, HookInstallOptions&& opt);

@@ -11,7 +11,7 @@ VMTRedirect::VMTRedirect(
     void**      fnVMTEntryGTA,
     bool        reversed
 ) :
-    Base{ name, HookType::VMTRedirect, reversed },
+    BaseHook{ name, HookType::VMTRedirect, reversed },
     m_FnVMTEntryOur{ fnVMTEntryOur },
     m_FnVMTEntryGTA{ fnVMTEntryGTA } {
     Switch();

@@ -13,7 +13,7 @@ constexpr auto GetJMPLocation(uint32 dwFrom, uint32 dwTo) { return dwTo - dwFrom
 constexpr auto GetFunctionLocationFromJMP(uint32 dwJmpLoc, uint32 dwJmpOffset) { return dwJmpOffset + dwJmpLoc + x86JMPSize; }
 
 namespace ReversibleHook {
-struct Base {
+struct BaseHook {
     enum class HookType { // Sadly can't use `Type` alone as it's some function..
         Simple,
         Virtual,
@@ -21,14 +21,14 @@ struct Base {
         VMTRedirect,
     };
 
-    Base(std::string fnName, HookType type, bool reversed = true) :
+    BaseHook(std::string fnName, HookType type, bool reversed = true) :
         m_Name{std::move(fnName)},
         m_Type{type},
         m_IsReversed{reversed}
     {
     }
 
-    virtual ~Base() = default;
+    virtual ~BaseHook() = default;
 
     virtual void Switch() = 0;
     virtual void Check() = 0;
