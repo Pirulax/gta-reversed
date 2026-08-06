@@ -10,6 +10,8 @@
 #include <SDL3/SDL.h>
 #include <bindings/imgui_impl_dx9.h>
 
+#include <reversiblehooks/HooksUtility.hpp>
+
 #define MINZBUFFERVALUE 0.0f
 #define MAXZBUFFERVALUE 1.0f
 #define NUMPIXELFORMATS     11
@@ -391,7 +393,7 @@ struct D3D9ProxyDevice {
 
         // NOTE: Wine has this VMT write-protected, unlike Windows.
         const auto vmtSize = (std::max(D3D9Device_Reset_VMT_Index, D3D9Device_SetViewport_VMT_Index) + 1) * sizeof(void*);
-        [[maybe_unused]] notsa::ScopedVirtualProtectModify _{ vmt, vmtSize, PAGE_EXECUTE_READWRITE };
+        ReversibleHooks::Utility::ScopedVirtualProtectModify _{ vmt, vmtSize, PAGE_EXECUTE_READWRITE };
 
         // Overwrite vmt entries
         vmt[D3D9Device_Reset_VMT_Index]       = FunctionToVoidPtr(&Proxy_Reset);

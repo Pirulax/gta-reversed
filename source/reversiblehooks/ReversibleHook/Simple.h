@@ -27,6 +27,8 @@ struct Simple : Base {
     uint32       m_iLibHookedBytes{};
     uint32       m_iLibFunctionAddress{}; // Address of our function
 
+    bool         m_HasAllocatedThunk{}; //!< If we allocated a thunk for this hook (See @ref GenerateECXPreservationThunk)
+
     Simple(
         std::string name,
         uint32 installAddress,
@@ -36,7 +38,7 @@ struct Simple : Base {
         int stackArguments = -1
     );
 
-    virtual ~Simple() override = default;
+    ~Simple() override;
 
     bool CheckLibFnForChangesAndStore(void* expected);
     void ApplyJumpToGTACode();

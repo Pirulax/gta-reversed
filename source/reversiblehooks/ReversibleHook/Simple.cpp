@@ -1,6 +1,7 @@
 #include "StdInc.h"
 #include <extensions/CommandLine.h>
 
+#include <reversiblehooks/HooksUtility.hpp>
 #include "Simple.h"
 
 namespace ReversibleHooks{
@@ -18,9 +19,9 @@ Simple::Simple(
     m_iRealHookedAddress(installAddress),
     m_iHookedBytes(iJmpCodeSize)
 {
-    #ifdef NOTSA_STANDALONE
-        return; /* Don't try to write to memory at all, not needed */
-    #endif
+#ifdef NOTSA_STANDALONE
+    return; /* Don't try to write to memory at all, not needed */
+#endif
 
     if (stackArguments != -1)
         GenerateECXPreservationThunk(stackArguments);
@@ -82,6 +83,12 @@ Simple::Simple(
     VirtualProtect((void*)installAddress, maxBytesToProtect, dwProtect[0], &dwProtect[1]);
 }
 
+Simple::~Simple() {
+    if (m_HasAllocatedThunk) {
+        VERIFY(VirtualFree((void*)(m_iLibFunctionAddress), 0, MEM_RELEASE));
+    }
+}
+
 // VS has this magic called `Edit and Continue`
 // The way it works is as follows:
 // A function address basically just points to a `jmp` instruction, which
@@ -98,8 +105,7 @@ bool Simple::CheckLibFnForChangesAndStore(void* expected) {
 }
 
 void Simple::ApplyJumpToGTACode() {
-    using namespace ReversibleHooks::detail;
-    VirtualCopy((void*)m_iLibFunctionAddress, (void*)&m_LibHookContent, m_iLibHookedBytes);
+    Utility::VirtualCopy((void*)m_iLibFunctionAddress, (void*)&m_LibHookContent, m_iLibHookedBytes);
 }
 
 /*
@@ -117,6 +123,10 @@ void Simple::ApplyJumpToGTACode() {
  */
 void Simple::GenerateECXPreservationThunk(int stackArguments)
 {
+    assert(!m_HasAllocatedThunk);
+
+    m_HasAllocatedThunk = true;
+
     size_t maxThunkSize = 7 * stackArguments + 16; // space for push instrs and prologue/epilogue
     int32 stackOffset = 4 * (stackArguments + 1);
     void* pThunk = VirtualAlloc(nullptr, maxThunkSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
@@ -163,11 +173,11 @@ void Simple::Switch()
     }
 #ifndef NOTSA_STANDALONE
     if (m_IsHooked) { // Unhook (make our code jump to the GTA function)
-        VirtualCopy((void*)m_iRealHookedAddress, (void*)&m_OriginalFunctionContent, m_iHookedBytes);
+        Utility::VirtualCopy((void*)m_iRealHookedAddress, (void*)&m_OriginalFunctionContent, m_iHookedBytes);
         ApplyJumpToGTACode();
     } else { // Hook (make the GTA function jump to ours)
-        VirtualCopy((void*)m_iRealHookedAddress, (void*)&m_HookContent, m_iHookedBytes);
-        VirtualCopy((void*)m_iLibFunctionAddress, (void*)&m_LibOriginalFunctionContent, m_iLibHookedBytes);
+        Utility::VirtualCopy((void*)m_iRealHookedAddress, (void*)&m_HookContent, m_iHookedBytes);
+        Utility::VirtualCopy((void*)m_iLibFunctionAddress, (void*)&m_LibOriginalFunctionContent, m_iLibHookedBytes);
     }
 #endif
     m_IsHooked = !m_IsHooked;

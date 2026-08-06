@@ -4,45 +4,62 @@
 
 #include <vector>
 #include <string>
-#include "Base.h"
-#include <reversiblehooks/ReversibleHook/Simple.h>
 
-namespace ReversibleHooks{
-namespace ReversibleHook{
+#include "Base.h"
+#include "Simple.h"
+#include "VMTRedirect.h"
+
+#include <reversiblehooks/VMTInfo.h>
+
+namespace ReversibleHooks {
+namespace ReversibleHook {
+/*!
+ * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
+ */
 struct Virtual : public Base {
+    /*!
+     * @brief Constructor for hooking virtual functions where the direct call and virtual functions are the same (So basically all virtual functions other than destructors)
+     * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
+     * @param fnVMTEntryOur Pointer to our VMT's entry of the function (eg.: `&vmt[index]`)
+     * @param fnVMTEntryGTA Pointer to GTA's VMT entry of the function (eg.: `&vmt[index]`)
+     * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
+     */
     Virtual(
-        std::string name,
-        void** vtblGTA,
-        void** vtblOur,
-        size_t fnIdx,
-        bool reversed = true
+        std::string_view name,
+        void**           fnVMTEntryOur,
+        void**           fnVMTEntryGTA,
+        bool             reversed = true
+    );
+
+    /*!
+     * @brief Advanced constructor for hooking virtual functions where the direct call and virtual functions aren't the same (For example destructors vs deleting virtual destructor)
+     * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
+     * @param fnVMTEntryOur Pointer to our VMT's entry of the function (eg.: `&vmt[index]`)
+     * @param fnAddressOur Address of our function (eg.: &Class::VirtualFunction)
+     * @param fnVMTEntryGTA Pointer to GTA's VMT entry of the function (eg.: `&vmt[index]`)
+     * @param fnAddressGTA Address of GTA function (eg.: &Class::VirtualFunction)
+     * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
+     */
+    Virtual(
+        std::string_view name,
+        void**           fnVMTEntryOur,
+        void*            fnAddressOur,
+        void**           fnVMTEntryGTA,
+        void*            fnAddressGTA,
+        bool             reversed = true
     );
     ~Virtual() override = default;
 
     void        Switch() override;
-    void        Check() override { m_simpleHook.Check(); }
+    void        Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }
     const char* Symbol() const override { return "V"; }
 
-    auto GetHookGTAAddress() const { return m_pfns[GTA]; }
-    auto GetHookOurAddress() const { return m_pfns[OUR]; }
+    auto        GetHookGTAAddress() const { return m_DirectCallHook.GetHookGTAAddress(); }
+    auto        GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
 
 private:
-    // Use these values for indexing below arrays
-    constexpr static auto GTA = 0u;
-    constexpr static auto OUR = 1u;
-
-    //! Original function pointers
-    void* m_pfns[2]{};
-
-    //! vtables
-    void** m_vtbls[2]{};
-
-    //! Function index in vtable
-    size_t m_fnIdx{};
-
-    //! This makes sure direct calls (so not thru the vtbl) are also hooked properly
-    Simple m_simpleHook;
+    Simple      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
+    VMTRedirect m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
 };
-
-};
-};
+}; // namespace ReversibleHook
+}; // namespace ReversibleHooks

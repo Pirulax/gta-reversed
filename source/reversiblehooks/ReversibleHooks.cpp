@@ -9,18 +9,12 @@
 #include "ReversibleHook/Simple.h"
 #include "ReversibleHook/Virtual.h"
 #include "RootHookCategory.h"
+#include "VMTInfo.h"
 #include <fstream>
 
 namespace ReversibleHooks {
 
 RootHookCategory s_RootCategory{};
-HMODULE          s_hThisDLL{}; // Handle to this DLL, only valid after `OnInjectionBegin` is called.
-
-#ifndef NDEBUG
-// Not particularly memory efficient, but it should be fine
-std::unordered_set<uint32> s_HookedAddresses{};  // Original GTA addresses to which we've installed hooks
-#endif
-
 RootHookCategory& GetRootCategory() {
     return s_RootCategory;
 }
@@ -69,56 +63,36 @@ void SwitchHook(std::string_view funcName) {
 }
 
 void OnInjectionBegin(HMODULE hThisDLL) {
-    s_hThisDLL = hThisDLL;
-
-#ifndef NDEBUG
-    s_HookedAddresses.reserve(20000); // Should be enough - We free it after the injection has finished, so it should be fine
-#endif
+    NOTSA_LOG_DEBUG("OnInjectionBegin");
 }
 
 void OnInjectionEnd() {
-#ifndef NDEBUG
-    // Hopefully these deallocates all memory
-    s_HookedAddresses.clear();
-    s_HookedAddresses = {};
-#endif
-
+    NOTSA_LOG_DEBUG("OnInjectionBegin");
     s_RootCategory.OnInjectionEnd();
-
     if (!CommandLine::s_DumpHooksPath.empty()) {
         WriteHooksToFile(CommandLine::s_DumpHooksPath);
     }
 }
 
-void InstallVirtual(std::string_view category, std::string fnName, void** vtblGTA, void** vtblOur, void* fnGTAAddr, void* fnOurAddr, size_t nVirtFns, const HookInstallOptions& opt) {
-#ifdef NOTSA_STANDALONE
-    const auto fnVTblIdx = -1;
-#else
-    // Find fn index in vtbl
-    const auto spanGTAVTbl = std::span{ vtblGTA, nVirtFns };
-    const auto iter = rng::find(spanGTAVTbl, fnGTAAddr);
-    if (iter == spanGTAVTbl.end()) {
-        /* Tips in case you ever encounter this
-        * - Make sure the vtable address and size is correct
-        * - Make sure function address you're hooking is correct
-        */
-        NOTSA_UNREACHABLE("{}: Couldn't find function [{} @ {}] in vtable\n", category, fnName, fnGTAAddr);
-    }
-    const auto fnVTblIdx = (size_t)rng::distance(spanGTAVTbl.begin(), iter);
-#endif
-
-    // Make sure vtable entries correspond to GTA's layout
-    //assert(vtblOur[fnVTblIdx] == fnOurAddr); // Doesn't work because the compiler generates thunks in debug mode
-
-#ifdef HOOKS_DEBUG
-    std::cout << std::format("{}::{} => {}\n", category, fnName, fnVTblIdx);
-#endif
-
+void InstallVirtual(
+    std::string_view   category,
+    std::string        fnName,
+    Utility::VMTInfo   vmtInfoOur,
+    void*              fnAddressOur,
+    Utility::VMTInfo   vmtInfoGTA,
+    void*              fnAddressGTA,
+    HookInstallOptions opt
+) {
+    const auto idx = vmtInfoGTA.FindIndexOf(fnAddressGTA);
+    // We can't do `vmtInfoOur.FindIndexOf(fnAddressOur)` because `fnAddressOur` points to the thunk, while the address in the VMT is pointing to the actual function
     auto item = std::make_shared<ReversibleHook::Virtual>(
         std::move(fnName),
-        vtblGTA,
-        vtblOur,
-        fnVTblIdx,
+        vmtInfoOur.GetEntryAddressAt(idx),
+#ifdef NOTSA_STANDALONE
+        nullptr,
+#else
+        vmtInfoGTA.GetEntryAddressAt(idx),
+#endif
         opt.reversed
     );
     item->State(opt.enabled);
@@ -132,7 +106,7 @@ void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook
 
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
 void InstallScriptCommand(std::string_view category, eScriptCommands cmd) {
-    AddItemToCategory( \
+    AddItemToCategory(
         category,
         std::make_shared<::ReversibleHooks::ReversibleHook::ScriptCommand>(cmd)
     );
@@ -179,19 +153,22 @@ void WriteHooksToFile(const std::filesystem::path& file) {
 }
 
 namespace detail {
-void HookInstall(std::string_view category, std::string fnName, uint32 installAddress, void* addressToJumpTo, HookInstallOptions&& opt) {
+std::unordered_set<void*> s_HookedAddresses{};  // Original GTA addresses to which we've installed hooks
+bool MarkAddressAsHooked(void* address) {
+    const auto [iter, inserted] = s_HookedAddresses.insert(address);
+    return inserted;
+}
+
+void HookInstall(std::string_view category, std::string fnName, void* installAddress, void* addressToJumpTo, HookInstallOptions&& opt) {
 #ifndef NDEBUG // Functions with the same name are asserted in `HookCategory::AddItem()`
-    auto [iter, inserted] = s_HookedAddresses.insert(installAddress);
-    if (!inserted) {
-        NOTSA_LOG_ERR("{}/{} is hooked to an address (0x{:X}) that is already hooked! That's bad!", category.data(), fnName.c_str(), LOG_PTR(installAddress));
-        assert(false);
-        return;
+    if (!MarkAddressAsHooked(installAddress)) {
+        throw std::runtime_error(std::format("{}/{} is hooked to an address ({}) that is already hooked! That's bad!", category, fnName, installAddress));
     }
 #endif
 
     auto item = std::make_shared<ReversibleHook::Simple>(
         std::move(fnName),
-        installAddress,
+        (uint32)installAddress,
         addressToJumpTo,
         opt.reversed,
         opt.jmpCodeSize,
@@ -202,41 +179,5 @@ void HookInstall(std::string_view category, std::string fnName, uint32 installAd
     item->LockState(opt.locked);
     AddItemToCategory(category, std::move(item));
 }
-
-void VirtualCopy(void* dst, void* src, size_t nbytes) {
-    DWORD dwProtect[2] = { 0 };
-    VirtualProtect(dst, nbytes, PAGE_EXECUTE_READWRITE, &dwProtect[0]);
-    memcpy(dst, src, nbytes);
-    VirtualProtect(dst, nbytes, dwProtect[0], &dwProtect[1]);
-}
-
-// Really fucking simple name mangling for msvc
-// Check this out: https://en.m.wikiversity.org/wiki/Visual_C%2B%2B_name_mangling
-void MangleClassNameMSVC(CHAR* out, std::string_view name) {
-    if (const auto openerPos = name.find('<'); openerPos != std::string_view::npos) { // Templated class, this only works for single templated classes (for now)
-        // ??_7?$CTaskComplexSeekEntity@VCEntitySeekPosCalculatorStandard@@@@6B@
-        const auto closerPos = name.rfind('>');
-        *std::format_to(out, "??_7?${}@V{}@@@@6B@", name.substr(0, openerPos), name.substr(openerPos + 1, closerPos - openerPos - 1)) = 0;
-    } else {
-        // ??_7CTaskSimple@@6B@
-        *std::format_to(out, "??_7{}@@6B@", name) = 0;
-    }
-}
-
-// The VTable is exported as a symbol, in the format `??_7<class name>@@6B@` where `<class name>` is the name of the class.
-// In order for this to work the class has to be exported (So the `NOTSA_EXPORT_VTABLE` macro has to be used)
-void** GetVTableAddress(std::string_view className) {
-    CHAR mangledName[1024];
-    MangleClassNameMSVC(mangledName, className);
-    if (const auto vtbl = reinterpret_cast<void**>(GetProcAddress(s_hThisDLL, mangledName))) {
-#ifdef HOOKS_DEBUG
-        std::cout << std::format("{}: Our VMT: {} \n", className, (void*)vtbl);
-#endif
-        return vtbl;
-    }
-
-    NOTSA_UNREACHABLE("Couldn't find VTable of `{}`", className);
-}
-
 }; // namespace detail
 }; // namespace ReversibleHooks
