@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Base.h" 
+#include <Base.h>
 
 #include <vector>
 #include <string>
 
-#include "Base.h"
-#include "Simple.h"
-#include "VMTRedirect.h"
+#include "BaseHook.h"
+#include "SimpleHook.h"
+#include "VMTRedirectHook.h"
 
 #include <reversiblehooks/VMTInfo.h>
 

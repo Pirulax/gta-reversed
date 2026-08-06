@@ -6,8 +6,8 @@
 
 #include "HookSystem.h"
 #include <Enums/eScriptCommands.h>
-#include "ReversibleHook/Base.h"
-#include "ReversibleHook/VirtualDestructor.h"
+#include "ReversibleHook/BaseHook.h"
+#include "ReversibleHook/VirtualDestructorHook.h"
 #include "VMTInfo.h"
 #include "HooksUtility.hpp"
 

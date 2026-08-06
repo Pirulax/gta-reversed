@@ -2,7 +2,7 @@
 #include <extensions/CommandLine.h>
 
 #include <reversiblehooks/HooksUtility.hpp>
-#include "Simple.h"
+#include "SimpleHook.h"
 
 namespace ReversibleHooks{
 namespace ReversibleHook{

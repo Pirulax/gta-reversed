@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ReversibleHooks.h"
-#include "ReversibleHook/Base.h"
+#include "ReversibleHook/BaseHook.h"
 #include <TristateCheckbox.h>
 #include <ranges>
 #include <vector>

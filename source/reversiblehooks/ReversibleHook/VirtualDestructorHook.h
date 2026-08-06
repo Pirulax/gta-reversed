@@ -3,7 +3,7 @@
 #include <reversiblehooks/VMTInfo.h>
 #include <reversiblehooks/HooksUtility.hpp>
 
-#include "Virtual.h"
+#include "VirtualHook.h"
 
 namespace ReversibleHooks {
 namespace ReversibleHook {

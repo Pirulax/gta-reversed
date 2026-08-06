@@ -1,6 +1,6 @@
 #pragma once 
 
-#include "Base.h"
+#include "BaseHook.h"
 
 namespace ReversibleHooks{
 namespace ReversibleHook {

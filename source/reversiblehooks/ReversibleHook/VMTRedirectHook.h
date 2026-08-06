@@ -5,8 +5,8 @@
 #include <vector>
 #include <string>
 
-#include <reversiblehooks/ReversibleHook/Base.h>
-#include <reversiblehooks/ReversibleHook/Simple.h>
+#include <reversiblehooks/ReversibleHook/BaseHook.h>
+#include <reversiblehooks/ReversibleHook/SimpleHook.h>
 
 namespace ReversibleHooks {
 namespace ReversibleHook {

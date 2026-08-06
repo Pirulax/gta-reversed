@@ -1,6 +1,6 @@
 #include "StdInc.h"
 
-#include "Virtual.h"
+#include "VirtualHook.h"
 
 namespace ReversibleHooks {
 namespace ReversibleHook {

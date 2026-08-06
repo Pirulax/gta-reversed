@@ -3,11 +3,11 @@
 #include <extensions/CommandLine.h>
 
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
-#include "ReversibleHook/ScriptCommand.h"
+#include "ReversibleHook/ScriptCommandHook.h"
 #endif
 #include "ReversibleHooks.h"
-#include "ReversibleHook/Simple.h"
-#include "ReversibleHook/Virtual.h"
+#include "ReversibleHook/SimpleHook.h"
+#include "ReversibleHook/VirtualHook.h"
 #include "RootHookCategory.h"
 #include "VMTInfo.h"
 #include <fstream>

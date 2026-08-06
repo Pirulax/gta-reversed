@@ -1,7 +1,7 @@
 #include "StdInc.h"
 
 #include <reversiblehooks/HooksUtility.hpp>
-#include <reversiblehooks/ReversibleHook/VMTRedirect.h>
+#include <reversiblehooks/ReversibleHook/VMTRedirectHook.h>
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
