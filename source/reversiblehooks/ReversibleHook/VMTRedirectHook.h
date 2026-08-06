@@ -14,15 +14,15 @@ namespace ReversibleHook {
  * @brief Redirects calls to a function in the VMT to our own function, and vice versa.
  * @note Only modifies the VMT entries, doesn't handle direct calls to the function (eg.: `CEntity::Add`).
  */
-struct VMTRedirect : public BaseHook {
+struct VMTRedirectHook : public BaseHook {
 public:
-    VMTRedirect(
+    VMTRedirectHook(
         std::string name,
         void**      fnVMTEntryOur,
         void**      fnVMTEntryGTA,
         bool        reversed = true
     );
-    ~VMTRedirect() override = default;
+    ~VMTRedirectHook() override = default;
 
     void        Switch() override;
     void        Check() override { /* nop */ }

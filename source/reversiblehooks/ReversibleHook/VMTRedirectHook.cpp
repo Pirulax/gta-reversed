@@ -5,7 +5,7 @@
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
-VMTRedirect::VMTRedirect(
+VMTRedirectHook::VMTRedirectHook(
     std::string name,
     void**      fnVMTEntryOur,
     void**      fnVMTEntryGTA,
@@ -17,7 +17,7 @@ VMTRedirect::VMTRedirect(
     Switch();
 }
 
-void VMTRedirect::Switch() {
+void VMTRedirectHook::Switch() {
     m_IsHooked      = !m_IsHooked;
 
     const auto from = m_IsHooked ? &m_FnVMTEntryGTA : &m_FnVMTEntryOur,

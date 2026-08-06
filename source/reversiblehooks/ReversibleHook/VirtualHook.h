@@ -59,7 +59,7 @@ struct VirtualHook : public BaseHook {
 
 private:
     BasicHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
-    VMTRedirect m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
+    VMTRedirectHook m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
