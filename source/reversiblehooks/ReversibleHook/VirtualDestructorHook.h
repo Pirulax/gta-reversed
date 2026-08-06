@@ -13,7 +13,7 @@ namespace ReversibleHook {
  */
 template<typename T>
     requires std::is_class_v<T>
-struct VirtualDestructor final : public Virtual {
+struct VirtualDestructorHook final : public Virtual {
 private:
     static constexpr auto DESTRUCTOR_VMT_INDEX = 0;
 public:
@@ -24,7 +24,7 @@ public:
      * @param fnAddressGTA Address of GTA base destructor (eg.: &Class::VirtualFunction)
      * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
-    VirtualDestructor(
+    VirtualDestructorHook(
         Utility::VMTInfo vmtInfoOur,
         Utility::VMTInfo vmtInfoGTA,
         void*            fnAddressGTA,

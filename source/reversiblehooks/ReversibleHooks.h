@@ -181,7 +181,7 @@ namespace ReversibleHooks {
         if (!detail::MarkAddressAsHooked((void*)addressGTA)) {
             throw std::runtime_error(std::format("{}/Destructor is hooked to an address ({}) that is already hooked!", category, (void*)(addressGTA)));
         }
-        auto hook = std::make_shared<ReversibleHook::VirtualDestructor<T>>(
+        auto hook = std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
             vmtInfoOur,
             vmtInfoGTA,
             (void*)(addressGTA),
