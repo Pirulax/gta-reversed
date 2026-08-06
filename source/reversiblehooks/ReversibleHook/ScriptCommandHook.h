@@ -7,8 +7,8 @@
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
 namespace ReversibleHooks {
 namespace ReversibleHook {
-struct ScriptCommand : BaseHook {
-    ScriptCommand(eScriptCommands command, bool reversed = true, bool enabledByDefault = true) :
+struct ScriptCommandHook : BaseHook {
+    ScriptCommandHook(eScriptCommands command, bool reversed = true, bool enabledByDefault = true) :
         BaseHook{ std::string{::notsa::script::GetScriptCommandName(command)}, BaseHook::HookType::ScriptCommand, reversed },
         m_cmd{command},
         m_originalHandler{CRunningScript::CustomCommandHandlerOf(command)}
@@ -19,7 +19,7 @@ struct ScriptCommand : BaseHook {
         }
     }
 
-    ~ScriptCommand() override = default;
+    ~ScriptCommandHook() override = default;
 
     void Switch() override {
         using namespace ::notsa::script;

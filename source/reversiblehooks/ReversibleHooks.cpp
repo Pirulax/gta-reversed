@@ -108,7 +108,7 @@ void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook
 void InstallScriptCommand(std::string_view category, eScriptCommands cmd) {
     AddItemToCategory(
         category,
-        std::make_shared<::ReversibleHooks::ReversibleHook::ScriptCommand>(cmd)
+        std::make_shared<::ReversibleHooks::ReversibleHook::ScriptCommandHook>(cmd)
     );
 }
 #endif
