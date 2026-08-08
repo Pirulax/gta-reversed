@@ -1465,7 +1465,11 @@ void InjectHooksMain() {
 }
 
 void InjectHooksMain(HMODULE hThisDLL) {
+    ZoneScoped;
+
+    const auto now = std::chrono::high_resolution_clock::now();
     ReversibleHooks::OnInjectionBegin(hThisDLL);
     InjectHooksMain();
     ReversibleHooks::OnInjectionEnd();
+    NOTSA_LOG_INFO("Injected hooks in {} ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - now).count());
 }
