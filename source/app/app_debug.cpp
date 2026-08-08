@@ -216,7 +216,7 @@ notsa::Logging::Logging() {
     spdlog::set_default_logger(Create("default"));
     spdlog::flush_every(100ms);
     
-    AddVectoredExceptionHandler(1, WindowsExceptionHandler);
+    SetUnhandledExceptionFilter(WindowsExceptionHandler);
 }
 
 notsa::Logging::~Logging() {
