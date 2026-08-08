@@ -465,4 +465,13 @@ concept is_specialization_of = requires ( std::remove_cvref_t<T> t )
   []<typename... Args> ( Template<Args...>& ) {} ( t ); 
 };
 
+/*!
+ * @brief Round number up to the nearest multiple of `multiple`
+ */
+template<std::integral T>
+T round_up_to_multiple(T value, T multiple) {
+    assert(multiple > 0);
+    return ((value + multiple - 1) / multiple) * multiple;
+}
+
 }; // namespace notsa
