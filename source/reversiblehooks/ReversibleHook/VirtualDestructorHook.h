@@ -22,21 +22,18 @@ public:
      * @param vmtInfoOur Our VMT's info
      * @param vmtInfoGTA GTA VMT's info
      * @param fnAddressGTA Address of GTA base destructor (eg.: &Class::VirtualFunction)
-     * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
     VirtualDestructorHook(
         Utility::VMTInfo vmtInfoOur,
         Utility::VMTInfo vmtInfoGTA,
-        void*            fnAddressGTA,
-        bool             reversed = true
+        void*            fnAddressGTA
     ) :     
         VirtualHook{  
             "Destructor",
             vmtInfoOur.GetEntryAddressAt(DESTRUCTOR_VMT_INDEX),
             Utility::GetScalarDestructorAddress<T>(),
             vmtInfoGTA.GetEntryAddressAt(DESTRUCTOR_VMT_INDEX),
-            fnAddressGTA,
-            reversed
+            fnAddressGTA
         }
     {
     }

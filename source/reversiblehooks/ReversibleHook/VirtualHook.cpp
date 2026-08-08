@@ -7,16 +7,14 @@ namespace ReversibleHook {
 VirtualHook::VirtualHook(
     std::string_view name,
     void**           fnVMTEntryOur,
-    void**           fnVMTEntryGTA,
-    bool             reversed
+    void**           fnVMTEntryGTA
 ) :
     VirtualHook{
         std::move(name),
         fnVMTEntryOur,
         *fnVMTEntryOur,
         fnVMTEntryGTA,
-        *fnVMTEntryGTA,
-        reversed
+        *fnVMTEntryGTA
     }
 {
 }
@@ -26,12 +24,11 @@ VirtualHook::VirtualHook(
     void**           fnVMTEntryOur,
     void*            fnAddressOur,
     void**           fnVMTEntryGTA,
-    void*            fnAddressGTA,
-    bool             reversed
+    void*            fnAddressGTA
 ) :
-    TwoWayHookBase{ std::string{ name }, HookType::Virtual, reversed },
-    m_VirtualDispatchHook{ std::string{ name }, fnVMTEntryOur, fnVMTEntryGTA, reversed },
-    m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA, reversed } {
+    TwoWayHookBase{ std::string{ name }, HookType::Virtual },
+    m_VirtualDispatchHook{ std::string{ name }, fnVMTEntryOur, fnVMTEntryGTA },
+    m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA } {
     Switch();
 }
 

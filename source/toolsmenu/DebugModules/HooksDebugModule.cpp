@@ -1,19 +1,20 @@
 #include "StdInc.h"
 
-#include <reversiblehooks/RootHookCategory.h>
-#include "HooksDebugModule.h"
-#include "Utility.h"
-#include <reversiblehooks/ReversibleHook/TwoWayHookBase.h>
-#include <reversiblehooks/ReversibleHook/StaticHook.h>
-#include <reversiblehooks/ReversibleHook/VirtualHook.h>
-
-#include <imgui.h>
-#include <libs/imgui/misc/cpp/imgui_stdlib.h>
-#include <TristateCheckbox.h>
 #include <string>
 #include <ranges>
 #include <optional>
 #include <format>
+
+#include <imgui.h>
+#include <libs/imgui/misc/cpp/imgui_stdlib.h>
+
+#include <TristateCheckbox.h>
+
+#include <reversiblehooks/ReversibleHooks.h>
+#include <reversiblehooks/HookCategory.h>
+
+#include "Utility.h"
+#include "HooksDebugModule.h"
 
 namespace RH = ReversibleHooks;
 namespace rng = std::ranges;
@@ -67,7 +68,7 @@ void HooksDebugModule::HookFilter::MakeAllVisibleAndOpen(ReversibleHooks::HookCa
 
     cat.m_anyItemsVisible = true;
     for (auto& i : cat.Items()) {
-        i->m_isVisible = true;
+        i.SetMatchesSearchFilter(true);
     }
 
     for (auto& sc : cat.SubCategories()) {
@@ -101,8 +102,9 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
         if (allowFilter && IsHookFilterActive()) {
             cat.m_anyItemsVisible = false;
             for (auto& i : cat.Items()) {
-                i->m_isVisible = StringContainsString(i->Name(), *m_HookName, m_IsCaseSensitive);
-                cat.m_anyItemsVisible |= i->m_isVisible;
+                const auto matches = StringContainsString(i.GetName(), *m_HookName, m_IsCaseSensitive);
+                i.SetMatchesSearchFilter(matches);
+                cat.m_anyItemsVisible |= matches;
             }
         } else { // Otherwise make sure all items are visible (if any)
             if (cat.Items().empty()) { // No items, make sure flag is set correctly.
@@ -110,7 +112,7 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
             } else {
                 cat.m_anyItemsVisible = true;
                 for (auto& i : cat.Items()) {
-                    i->m_isVisible = true;
+                    i.SetMatchesSearchFilter(true);
                 }
             }
         }
@@ -184,11 +186,11 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
                     return false;
                 }
 
-                for (auto iterCat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
-                    if (!StringContainsString(iterCat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
+                for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
+                    if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
                         return false;
                     }
-                    iterCat = iterCat->Parent();
+                    icat = icat->Parent();
                 }
 
                 return true;
@@ -206,7 +208,7 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
 
             return { visible, open };
         }
-        ;       } else {
+    } else {
         // Filter by hook names
         // Category is visible if it:
         // - It has visible hooks (After filtering)
@@ -338,32 +340,32 @@ bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
 
 void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
     for (auto& item : cat.Items()) {
-        if (!item->m_isVisible) {
+        if (!item.GetMatchesSearchFilter()) {
             continue;
         }
 
         // Use hook's address as unique ID - Hooks aren't dynamically created, so this should really be unique
-        IDScope(item.get());
+        IDScope(&item);
 
-        // Draw hook symbol (`S` or `V`)
+        // Draw hook symbol
         {
             PushStyleVar(ImGuiStyleVar_Alpha, GetStyle().Alpha * 0.5f);
             AlignTextToFramePadding();
-            Text(item->Symbol());
+            Text(item.GetSymbol());
             PopStyleVar();
         }
 
         // State checkbox
         {
             IDScope("state");
-            DisabledScope(item->Locked());
+            DisabledScope(item.GetIsStateLocked());
 
-            bool hooked{ item->Hooked() };
+            bool hooked{ item.GetState() };
 
-            if (SameLine(); Checkbox(item->Name().c_str(), &hooked) && !item->Locked()) {
+            if (SameLine(); Checkbox(item.GetName().c_str(), &hooked) && !item.GetIsStateLocked()) {
                 cat.SetItemEnabled(item, hooked);
             }
-            if (!item->Locked() && HandleSlideSetterForItem(hooked)) {
+            if (!item.GetIsStateLocked() && HandleSlideSetterForItem(hooked)) {
                 cat.SetItemEnabled(item, hooked);
             }
         }
@@ -372,36 +374,24 @@ void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
             continue;
         }
 
-        const auto ProcessToolTip = [](const auto& i) {
-            const auto DrawToolTip = [](void* gta, void* our, bool locked) {
-                const auto AddrToClipboard = [](void* addr) {
-                    SetClipboardText(std::format("{}", addr).c_str());
-                };
-
-                std::string tooltipText = std::format("SA: {} / Our: {}", gta, our);
-                if (locked) {
-                    tooltipText += "\n(locked)";
-                }
-                SetTooltip(tooltipText.c_str());
-
-                if (IsItemClicked(ImGuiMouseButton_Right)) {
-                    AddrToClipboard(gta);
-                } else if (IsItemClicked(ImGuiMouseButton_Middle)) {
-                    AddrToClipboard(our);
-                }
+        const auto gta = item.GetHookAddressGTA(),
+                   our = item.GetHookAddressOur();
+        if (gta && our) {
+            const auto AddrToClipboard = [](void* addr) {
+                SetClipboardText(std::format("{}", addr).c_str());
             };
-            DrawToolTip(i->GetHookGTAAddress(), i->GetHookOurAddress(), i->Locked());
-        };
 
-        switch (item->Type()) {
-        case RH::ReversibleHook::TwoWayHookBase::HookType::Static: {
-            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::StaticHook>(item));
-            break;
-        }
-        case RH::ReversibleHook::TwoWayHookBase::HookType::Virtual: {
-            ProcessToolTip(std::static_pointer_cast<RH::ReversibleHook::VirtualHook>(item));
-            break;
-        }
+            std::string tooltipText = std::format("SA: {} / Our: {}", gta, our);
+            if (item.GetIsStateLocked()) {
+                tooltipText += "\n(locked)";
+            }
+            SetTooltip(tooltipText.c_str());
+
+            if (IsItemClicked(ImGuiMouseButton_Right)) {
+                AddrToClipboard(gta);
+            } else if (IsItemClicked(ImGuiMouseButton_Middle)) {
+                AddrToClipboard(our);
+            }
         }
     }
 }

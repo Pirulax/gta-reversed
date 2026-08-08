@@ -11,8 +11,8 @@ namespace ReversibleHook {
  * @brief 2-way hook for hooking script commands
  */
 struct ScriptCommandHook : TwoWayHookBase {
-    ScriptCommandHook(eScriptCommands command, bool reversed = true, bool enabledByDefault = true) :
-        TwoWayHookBase{ std::string{::notsa::script::GetScriptCommandName(command)}, TwoWayHookBase::HookType::ScriptCommand, reversed },
+    ScriptCommandHook(eScriptCommands command, bool enabledByDefault = true) :
+        TwoWayHookBase{ std::string{::notsa::script::GetScriptCommandName(command)}, TwoWayHookBase::HookType::ScriptCommand },
         m_cmd{command},
         m_originalHandler{CRunningScript::CustomCommandHandlerOf(command)}
     {
@@ -33,8 +33,8 @@ struct ScriptCommandHook : TwoWayHookBase {
         CRunningScript::CustomCommandHandlerOf(m_cmd) = m_IsHooked ? m_originalHandler : nullptr;
     }
 
-    void        Check() override { /* nop */ }
-    const char* Symbol() const override { return "C"; }
+    void Check() override { /* nop */ }
+
 private:
     eScriptCommands                         m_cmd{};
     ::notsa::script::CommandHandlerFunction m_originalHandler{};

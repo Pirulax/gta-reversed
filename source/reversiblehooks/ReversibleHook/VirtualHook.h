@@ -22,13 +22,11 @@ struct VirtualHook : public TwoWayHookBase {
      * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
      * @param fnVMTEntryOur Pointer to our VMT's entry of the function (eg.: `&vmt[index]`)
      * @param fnVMTEntryGTA Pointer to GTA's VMT entry of the function (eg.: `&vmt[index]`)
-     * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
     VirtualHook(
         std::string_view name,
         void**           fnVMTEntryOur,
-        void**           fnVMTEntryGTA,
-        bool             reversed = true
+        void**           fnVMTEntryGTA
     );
 
     /*!
@@ -38,27 +36,23 @@ struct VirtualHook : public TwoWayHookBase {
      * @param fnAddressOur Address of our function (eg.: &Class::VirtualFunction)
      * @param fnVMTEntryGTA Pointer to GTA's VMT entry of the function (eg.: `&vmt[index]`)
      * @param fnAddressGTA Address of GTA function (eg.: &Class::VirtualFunction)
-     * @param reversed If this hook is reversed (Purely for documentation purposes, doesn't affect the hook's functionality)
      */
     VirtualHook(
         std::string_view name,
         void**           fnVMTEntryOur,
         void*            fnAddressOur,
         void**           fnVMTEntryGTA,
-        void*            fnAddressGTA,
-        bool             reversed = true
+        void*            fnAddressGTA
     );
 
     ~VirtualHook() override {
         State(false);
     }
 
-    void        Switch() override;
-    void        Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }
-    const char* Symbol() const override { return "V"; }
-
-    auto        GetHookGTAAddress() const { return m_DirectCallHook.GetHookGTAAddress(); }
-    auto        GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
+    void Switch() override;
+    void Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }
+    auto GetHookGTAAddress() const { return m_DirectCallHook.GetHookGTAAddress(); }
+    auto GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
 
 private:
     StaticHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)

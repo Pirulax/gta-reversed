@@ -1,25 +1,26 @@
 #pragma once
 
-#include "ReversibleHooks.h"
-#include "ReversibleHook/TwoWayHookBase.h"
-#include <TristateCheckbox.h>
 #include <ranges>
 #include <vector>
 #include <string>
 #include <algorithm>
 #include <memory>
 
+#include <TristateCheckbox.h>
+
+#include "ReversibleHooks.h"
+#include "HookCategoryItem.h"
+
 namespace rng = std::ranges;
 
 namespace ReversibleHooks {
 class HookCategory {
 public:
-    using Item = std::shared_ptr<ReversibleHook::TwoWayHookBase>;
     using HooksState = ImGui::ImTristate; // Don't really want to deal with enum conversions so this should do.
     //enum class HooksState {
-    //    ALL  = 1, // All hooked
-    //    NONE = 0, // None hooked
-    //    SOME = -1 // Some hooked
+    //    ALL  = 1, // All GetState
+    //    NONE = 0, // None GetState
+    //    SOME = -1 // Some GetState
     //};
 
 public:
@@ -56,12 +57,12 @@ public:
     void Open(bool open)              { m_isOpen = open; }
 
     //! Add one item to this category (Deal with possible state change)
-    void AddItem(Item item) {
-        assert(!FindItem(item->Name())); // Make sure there are no duplicate names :D
+    void AddItem(HookCategoryItem item) {
+        assert(!FindItem(item.GetName())); // Make sure there are no duplicate names :D
 
         // Lexographically sorted insert 
         const auto& emplacedItem = *m_items.emplace(
-            rng::upper_bound(m_items, item->Name(), {}, [](auto&& v) { return v->Name(); }),
+            rng::upper_bound(m_items, item.GetName(), {}, [](auto&& v) { return v.GetName(); }),
             std::move(item)
         );
 
@@ -91,17 +92,17 @@ public:
         ReCalculateOverallStateAndMaybeNotify();
     }
 
-    // Set one item's state - Calling `item->SetState` isn't advised as the category's state won't be updated.
-    void SetItemEnabled(Item& item, bool enabled) {
-        if (item->State(enabled)) { // State changed?
+    // Set one item's state - Calling `item.SetState` isn't advised as the category's state won't be updated.
+    void SetItemEnabled(HookCategoryItem& item, bool enabled) {
+        if (item.SetState(enabled)) { // State changed?
             OnOneItemStateChange(item);
         }
     }
 
     //! Find item by name (function name)
-    Item FindItem(std::string_view name) {
-        const auto it = rng::find_if(m_items, [&](const auto& c) { return c->Name() == name; });
-        return it == m_items.end() ? nullptr : *it;
+    HookCategoryItem* FindItem(std::string_view name) {
+        const auto it = rng::find_if(m_items, [&](const auto& c) { return c.GetName() == name; });
+        return it == m_items.end() ? nullptr : &*it;
     }
 
     //! Find subcategory by name (Only checks for direct sub categories [No recursion])
@@ -152,7 +153,7 @@ public:
         // Re-sort all categories (uses operator<=> defined below)
         m_subCategories.sort();
 
-        // Propagte to all child
+        // Propagate to all child
         for (auto&& cat : m_subCategories) {
             cat.OnInjectionEnd();
         }
@@ -171,8 +172,8 @@ private:
         rng::for_each(m_subCategories, &HookCategory::CalculateIsDisabled);
 
         // Now update ourselves
-        m_allCatsDisabled = rng::all_of(m_subCategories, [](HookCategory& cat) {  return cat.Disabled(); });
-        m_itemsDisabled   = rng::all_of(m_items, [](const Item& item)  { return item->Locked(); });
+        m_allCatsDisabled = rng::all_of(m_subCategories, [](HookCategory& cat) { return cat.Disabled(); });
+        m_itemsDisabled   = rng::all_of(m_items, [](const HookCategoryItem& item)  { return item.GetIsStateLocked(); });
     }
 
     /*!
@@ -225,9 +226,9 @@ private:
             [
                 enabled,
                 expectedState = enabled ? HooksState::ALL : HooksState::NONE
-            ](Item& item) {
-                (void)item->State(enabled);
-                return item->Hooked() == enabled;
+            ](HookCategoryItem& item) {
+                (void)item.SetState(enabled);
+                return item.GetState() == enabled;
             },
             &GetItemHookState
         );
@@ -319,7 +320,7 @@ private:
     * @param entities The entitites to process (Items or Categories)
     * @param currOverallState Current overall state of the entities
     * @param entityState The changed entity's state
-    * @param isActivePred The function used to check if an entity is hooked (active) or not (should return true/false respectively)
+    * @param isActivePred The function used to check if an entity is GetState (active) or not (should return true/false respectively)
     */
     // Helper function to recaulcate new state of collection when one item's state changes
     template<rng::input_range R, typename Fn>
@@ -350,7 +351,7 @@ private:
     // Not always called - Only when an individual item's state changes
     // Also not called if item is modified from the outside
     // (Currently only called by `AddItem` and `SetItemEnabled`, but not from `SetAllItemsEnabled`)
-    void OnOneItemStateChange(const Item& item) {
+    void OnOneItemStateChange(const HookCategoryItem& item) {
         m_itemsState = CalculateEntitiesOverallStateOnEntryChange(
             m_items,
             m_itemsState,
@@ -360,8 +361,8 @@ private:
         ReCalculateOverallStateAndMaybeNotify();
     }
 
-    static HooksState GetItemHookState(const Item& i) {
-        return i->Hooked()
+    static HooksState GetItemHookState(const HookCategoryItem& i) {
+        return i.GetState()
             ? HooksState::ALL
             : HooksState::NONE;
     }
@@ -374,23 +375,24 @@ private:
             return rhs.Name() <=> lhs.Name(); // Same number of sub-categories, order by name
         return numSubCatOrder; // Order by no. of sub-categories
     }
+
 public:
     // Stuff required for the Hooks tool
-    HooksState                m_itemsState{ HooksState::ALL };   // Collective state of all items (Can be ignored if `m_items.empty()` (In this case it's always NONE))
-    HooksState                m_subcatsState{ HooksState::ALL }; // Collective state of all subcategories (Can be ignored if `m_subCategories.empty()` (In this case it's always NONE))
-    HooksState                m_overallState{ HooksState::ALL }; // Overall state - Combination of the above 2 - Calculated by `ReCalculateOverallStateAndMaybeNotify`
-    bool                      m_isVisible{true};                 // Updated each time the search box is updated. Indicates whenever we should be visible in the GUI.
-    bool                      m_isOpen{};                        // Is our tree currently open
-    bool                      m_triStateToggle{};                // Used by the UI when m_overallState is mixed to decide what the next state should be
-    bool                      m_anyItemsVisible{true};           // Used when searching
-    bool                      m_allCatsDisabled{true};           // Are all owned sub-categories disabled
-    bool                      m_itemsDisabled{true};             // Are all owned items disabled
-private:
+    HooksState m_itemsState{ HooksState::ALL };   // Collective state of all items (Can be ignored if `m_items.empty()` (In this case it's always NONE))
+    HooksState m_subcatsState{ HooksState::ALL }; // Collective state of all subcategories (Can be ignored if `m_subCategories.empty()` (In this case it's always NONE))
+    HooksState m_overallState{ HooksState::ALL }; // Overall state - Combination of the above 2 - Calculated by `ReCalculateOverallStateAndMaybeNotify`
+    bool       m_isVisible{ true };               // Updated each time the search box is updated. Indicates whenever we should be visible in the GUI.
+    bool       m_isOpen{};                        // Is our tree currently open
+    bool       m_triStateToggle{};                // Used by the UI when m_overallState is mixed to decide what the next state should be
+    bool       m_anyItemsVisible{ true };         // Used when searching
+    bool       m_allCatsDisabled{ true };         // Are all owned sub-categories disabled
+    bool       m_itemsDisabled{ true };           // Are all owned items disabled
 
-    HookCategory*             m_parent{};        // Category we belong to - In case of `RootHookCategory` this is always `nullptr`.
-    std::string               m_name{};          // Name of this category (Eg.: `Root`, `Global`, `Entity`, etc...)
-    std::list<HookCategory>   m_subCategories{}; // Subcategories - It has to be a list, because we have links between categories
-    std::vector<Item>         m_items{};         // Hooks in this category (`RootCategory` should have none) - TODO: IMHO we don't really need to use smart pointers - could just store the hooks as objects instead
+private:
+    HookCategory*               m_parent{};        // Category we belong to - In case of `RootHookCategory` this is always `nullptr`.
+    std::string                 m_name{};          // Name of this category (Eg.: `Root`, `Global`, `Entity`, etc...)
+    std::list<HookCategory>     m_subCategories{}; // Subcategories - It has to be a list, because we have links between categories
+    std::list<HookCategoryItem> m_items{};         // Hooks in this category (`RootCategory` should have none)
 };
 
 }; // namespace ReversibleHooks 

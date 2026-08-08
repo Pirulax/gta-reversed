@@ -11,11 +11,10 @@ StaticHook::StaticHook(
     std::string_view name,
     void*            fnAddressOur,
     void*            fnAddressGTA,
-    bool             reversed,
     size_t           numStackArgumentsToPreserve,
     bool             preserveRegisters
 ) :
-    TwoWayHookBase{ std::string{ name }, HookType::Static, reversed },
+    TwoWayHookBase{ std::string{ name }, HookType::Static },
     m_OneWayFromGTA{ std::format("{}_GTA", name), fnAddressGTA, fnAddressOur, numStackArgumentsToPreserve, preserveRegisters },
     m_OneWayToGTA{ std::format("{}_Our", name), fnAddressOur, fnAddressGTA, numStackArgumentsToPreserve, preserveRegisters }
 {

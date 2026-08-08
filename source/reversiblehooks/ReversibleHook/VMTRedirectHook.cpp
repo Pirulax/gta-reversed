@@ -8,10 +8,9 @@ namespace ReversibleHook {
 VMTRedirectHook::VMTRedirectHook(
     std::string name,
     void**      fnVMTEntryOur,
-    void**      fnVMTEntryGTA,
-    bool        reversed
+    void**      fnVMTEntryGTA
 ) :
-    TwoWayHookBase{ name, HookType::VMTRedirect, reversed },
+    TwoWayHookBase{ name, HookType::VMTRedirect },
     m_FnVMTEntryOur{ fnVMTEntryOur },
     m_FnVMTEntryGTA{ fnVMTEntryGTA } {
     Switch();

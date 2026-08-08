@@ -1,7 +1,8 @@
 #pragma once
+#include <string_view>
 
 #include "HookCategory.h"
-#include <string_view>
+#include "HookCategoryItem.h"
 #include "Utility.h"
 
 namespace ReversibleHooks {
@@ -12,7 +13,7 @@ namespace ReversibleHooks {
 class RootHookCategory : public HookCategory {
 public:
     RootHookCategory() :
-        HookCategory{ RH_RootCategoryName, nullptr } // Root has no parent
+        HookCategory{ "Root", nullptr} // Root has no parent
     {
         m_isOpen = true; // Root should be opened by default
     }
@@ -21,7 +22,7 @@ public:
     RootHookCategory(RootHookCategory&&)      = delete; 
 
     // @categoryList - A `/` separated category list - Eg.: `Entity/Ped` (The hook should be added to the `Entity` category's `Ped` sub-category)
-    void AddItemToNamedCategory(std::string_view categoryList, Item hook) {
+    void AddItemToNamedCategory(std::string_view categoryList, HookCategoryItem hook) {
         assert(!categoryList.empty()); // Should never be empty. To add to global category use `RH_ScopedCategoryGlobal()`
 
         HookCategory* cat = this; // Start with us (the root category)

@@ -19,8 +19,7 @@ public:
     VMTRedirectHook(
         std::string name,
         void**      fnVMTEntryOur,
-        void**      fnVMTEntryGTA,
-        bool        reversed = true
+        void**      fnVMTEntryGTA
     );
 
     ~VMTRedirectHook() override {
@@ -29,7 +28,6 @@ public:
 
     void        Switch() override;
     void        Check() override { /* nop */ }
-    const char* Symbol() const override { return "R"; }
     auto        GetHookGTAAddress() const noexcept { return m_FnVMTEntryGTA.OriginalFnPtr; }
     auto        GetHookOurAddress() const noexcept { return m_FnVMTEntryOur.OriginalFnPtr; }
 

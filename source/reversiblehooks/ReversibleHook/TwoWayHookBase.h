@@ -19,10 +19,9 @@ struct TwoWayHookBase {
         UNHOOKED
     };
 
-    TwoWayHookBase(std::string fnName, HookType type, bool reversed = true) :
-        m_Name{std::move(fnName)},
-        m_Type{type},
-        m_IsReversed{reversed}
+    TwoWayHookBase(std::string name, HookType type) :
+        m_Name{ std::move(name) },
+        m_Type{ type }
     {
     }
 
@@ -32,45 +31,37 @@ struct TwoWayHookBase {
 
     /*!
     * @brief Hook/unhook
-    * 
     * @param hooked If this hook should be installed/uninstalled (true/false)
-    *
     * @returns If the state has changed
     */
     bool State(bool hooked) {
         if (hooked == m_IsHooked) {
             return false; // No change
         }
-        if (m_IsLocked) {
-            return false; // Can't change
-        }
         Switch();
         return true;
     }
 
-    void LockState(bool locked) {
-        m_IsLocked = locked;
-    }
-
-    /// Symbol in ImGui (On the left side of the checkbox)
-    virtual const char* Symbol() const = 0;
-
     const auto& Name()     const { return m_Name; }
     const auto  Type()     const { return m_Type; }
     const auto  Hooked()   const { return m_IsHooked; }
-    const auto  Locked()   const { return m_IsLocked; }
-    const auto  Reversed() const { return m_IsReversed; }
-
-public:
-    // ImGui stuff
-    bool m_isVisible{true};
 
 protected:
-    bool        m_IsReversed{}; // Is the function reversed - Only used when dumping hooks to csv
     bool        m_IsHooked{};   // Is hook installed (true => yes, gta calls are redirected to our code, false => our code is redirected to the gta function)
-    bool        m_IsLocked{};   // Is hook locked, i.e.: the hooked state can't be changed.
     std::string m_Name{};       // Name of function, eg.: `Add` (Referring to CEntity::Add)
     HookType    m_Type{};
 };
 };
 };
+
+inline std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::TwoWayHookBase::HookType t) {
+    using enum ReversibleHooks::ReversibleHook::TwoWayHookBase::HookType;
+    switch (t) {
+    case OneWay:        return "OneWay";
+    case Static:        return "Static";
+    case Virtual:       return "Virtual";
+    case ScriptCommand: return "ScriptCommand";
+    case VMTRedirect:   return "VMTRedirect";
+    default:            return std::nullopt;
+    }
+}
