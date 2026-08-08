@@ -11,6 +11,9 @@
 #include "RootHookCategory.h"
 #include "VMTInfo.h"
 #include <fstream>
+using HooksCheckClock = std::chrono::steady_clock;
+static constexpr auto HOOKS_CHECK_INTERVAL = std::chrono::milliseconds{ 500 };
+HooksCheckClock::time_point s_LastHooksCheckTime{};
 
 namespace ReversibleHooks {
 
@@ -47,9 +50,12 @@ SetCatOrItemStateResult SetCategoryOrItemStateByPath(std::string_view path, bool
 }
 
 void CheckAll() {
-    s_RootCategory.ForEachItem([](auto& item) {
-        item->Check();
-    });
+    if (const auto now = HooksCheckClock::now(); now - s_LastHooksCheckTime > HOOKS_CHECK_INTERVAL) {
+        s_LastHooksCheckTime = now;
+        s_RootCategory.ForEachItem([](auto& item) {
+            item->Check();
+        });
+    }
 }
 
 void SwitchHook(std::string_view funcName) {
