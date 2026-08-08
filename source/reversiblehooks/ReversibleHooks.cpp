@@ -6,18 +6,20 @@
 #include "ReversibleHook/ScriptCommandHook.h"
 #endif
 #include "ReversibleHooks.h"
-#include "ReversibleHook/BasicHook.h"
+#include "ReversibleHook/StaticHook.h"
 #include "ReversibleHook/VirtualHook.h"
 #include "RootHookCategory.h"
 #include "VMTInfo.h"
 #include <fstream>
+
+
+ReversibleHooks::RootHookCategory s_RootCategory{};
+
 using HooksCheckClock = std::chrono::steady_clock;
 static constexpr auto HOOKS_CHECK_INTERVAL = std::chrono::milliseconds{ 500 };
 HooksCheckClock::time_point s_LastHooksCheckTime{};
 
 namespace ReversibleHooks {
-
-RootHookCategory s_RootCategory{};
 RootHookCategory& GetRootCategory() {
     return s_RootCategory;
 }
@@ -73,7 +75,7 @@ void OnInjectionBegin(HMODULE hThisDLL) {
 }
 
 void OnInjectionEnd() {
-    NOTSA_LOG_DEBUG("OnInjectionBegin");
+    NOTSA_LOG_DEBUG("OnInjectionEnd");
     s_RootCategory.OnInjectionEnd();
     if (!CommandLine::s_DumpHooksPath.empty()) {
         WriteHooksToFile(CommandLine::s_DumpHooksPath);
@@ -106,7 +108,7 @@ void InstallVirtual(
     AddItemToCategory(category, std::move(item));
 }
 
-void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::BaseHook> item) {
+void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::TwoWayHookBase> item) {
     s_RootCategory.AddItemToNamedCategory(category, std::move(item));
 }
 
@@ -126,15 +128,15 @@ void WriteHooksToFile(const std::filesystem::path& file) {
         s_RootCategory.ForEachCategory([&](const HookCategory& cat) {
             using namespace ReversibleHook;
             for (const auto& item : cat.Items()) {
-                if (item->Type() == BaseHook::HookType::ScriptCommand) {
+                if (item->Type() == TwoWayHookBase::HookType::ScriptCommand) {
                     continue;
                 }
                 const auto address = [&] {
                     switch (item->Type()) {
-                    case BaseHook::HookType::Virtual:
+                    case TwoWayHookBase::HookType::Virtual:
                         return std::static_pointer_cast<VirtualHook>(item)->GetHookGTAAddress();
-                    case BaseHook::HookType::Basic:
-                        return std::static_pointer_cast<BasicHook>(item)->GetHookGTAAddress();
+                    case TwoWayHookBase::HookType::Static:
+                        return std::static_pointer_cast<StaticHook>(item)->GetHookGTAAddress();
                     default:
                         NOTSA_UNREACHABLE();
                     }
@@ -177,11 +179,12 @@ void HookInstall(std::string_view category, std::string fnName, void* installAdd
         throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", category, fnName));
     }
 
+    auto item = std::make_shared<ReversibleHook::StaticHook>(
         std::move(fnName),
         addressToJumpTo,
         installAddress,
         opt.reversed,
-        opt.StackArgumentsToPreserve,
+        opt.StackArgumentsToPreserve.value_or(0),
         opt.PreserveRegisters
     );
     

@@ -82,27 +82,6 @@ constexpr void* GetScalarDestructorAddress() {
 }
 
 /*!
- * @brief Calculates the relative jump offset for a JMP instruction from one address to another.
- * @param from Address where the JMP instruction is located.
- * @param to Address to which the JMP instruction should jump.
- * @param jmpOpSize Size of the JMP instruction 
- * @return The relative offset to be used in the JMP instruction.
- */
-constexpr intptr_t GetJumpRelativeOffset(void* from, void* to, int32 jmpOpSize) {
-    return static_cast<uint8*>(to) - static_cast<uint8*>(from) - jmpOpSize;
-}
-
-/*!
-* @brief Calculates the absolute address of a function from a JMP instruction's location and its relative offset.
-* @param addressOfJmp Address of the JMP instruction
-* @param offset The relative offset used in the JMP instruction.
-* @return The absolute address of the jumped-to function.
-*/
-constexpr auto GetJumpTargetFromOffset(void* addressOfJmp, uintptr_t offset, int32 jmpOpSize = x86JMPSize) {
-    return static_cast<uint8*>(addressOfJmp) + offset + jmpOpSize;
-}
-
-/*!
  * @brief Reads a specified number of bytes from a given memory address and returns them as an integral type.
  * @tparam T 
  * @param address 

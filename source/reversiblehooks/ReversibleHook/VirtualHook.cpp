@@ -29,7 +29,7 @@ VirtualHook::VirtualHook(
     void*            fnAddressGTA,
     bool             reversed
 ) :
-    BaseHook{ std::string{ name }, HookType::Virtual, reversed },
+    TwoWayHookBase{ std::string{ name }, HookType::Virtual, reversed },
     m_VirtualDispatchHook{ std::string{ name }, fnVMTEntryOur, fnVMTEntryGTA, reversed },
     m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA, reversed } {
     Switch();

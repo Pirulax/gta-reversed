@@ -5,8 +5,8 @@
 #include <vector>
 #include <string>
 
-#include <reversiblehooks/ReversibleHook/BaseHook.h>
-#include <reversiblehooks/ReversibleHook/BasicHook.h>
+#include <reversiblehooks/ReversibleHook/TwoWayHookBase.h>
+#include <reversiblehooks/ReversibleHook/StaticHook.h>
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
@@ -14,7 +14,7 @@ namespace ReversibleHook {
  * @brief Redirects calls to a function in the VMT to our own function, and vice versa.
  * @note Only modifies the VMT entries, doesn't handle direct calls to the function (eg.: `CEntity::Add`).
  */
-struct VMTRedirectHook : public BaseHook {
+struct VMTRedirectHook final : public TwoWayHookBase {
 public:
     VMTRedirectHook(
         std::string name,
@@ -22,7 +22,10 @@ public:
         void**      fnVMTEntryGTA,
         bool        reversed = true
     );
-    ~VMTRedirectHook() override = default;
+
+    ~VMTRedirectHook() override {
+        State(false);
+    }
 
     void        Switch() override;
     void        Check() override { /* nop */ }

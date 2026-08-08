@@ -6,7 +6,7 @@
 
 #include "HookSystem.h"
 #include <Enums/eScriptCommands.h>
-#include "ReversibleHook/BaseHook.h"
+#include "ReversibleHook/TwoWayHookBase.h"
 #include "ReversibleHook/VirtualDestructorHook.h"
 #include "VMTInfo.h"
 #include "HooksUtility.hpp"
@@ -140,7 +140,7 @@ namespace ReversibleHooks {
     * @param category Category's path, eg.: "Global/"
     * @param item     Item to add
     */
-    void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::BaseHook> item);
+    void AddItemToCategory(std::string_view category, std::shared_ptr<ReversibleHook::TwoWayHookBase> item);
 
     namespace detail {
         void HookInstall(std::string_view category, std::string fnName, void* installAddress, void* addressToJumpTo, HookInstallOptions&& opt);

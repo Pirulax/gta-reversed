@@ -2,37 +2,31 @@
 
 #include <string>
 
- namespace ReversibleHooks{
-
-// TODO: Maybe this should go into `detail`
-constexpr uint32 JUMP_OPCODE = 0xE9;
-constexpr uint32 NOP_OPCODE  = 0x90;
-
-constexpr uint32 x86JMPSize = 5U;
-constexpr auto GetJMPLocation(uint32 dwFrom, uint32 dwTo) { return dwTo - dwFrom - x86JMPSize; }
-constexpr auto GetFunctionLocationFromJMP(uint32 dwJmpLoc, uint32 dwJmpOffset) { return dwJmpOffset + dwJmpLoc + x86JMPSize; }
-
+namespace ReversibleHooks {
 namespace ReversibleHook {
-struct BaseHook {
+struct TwoWayHookBase {
     enum class HookType { // Sadly can't use `Type` alone as it's some function..
         OneWay,
-        Basic,
+        Static,
         Virtual,
         ScriptCommand,
         VMTRedirect,
     };
 
-    BaseHook(std::string fnName, HookType type, bool reversed = true) :
+    enum class HookState {
+        REDIRECT_TO_GTA,
+        REDIRECT_TO_OURS,
+        UNHOOKED
+    };
+
+    TwoWayHookBase(std::string fnName, HookType type, bool reversed = true) :
         m_Name{std::move(fnName)},
         m_Type{type},
         m_IsReversed{reversed}
     {
     }
 
-    virtual ~BaseHook() {
-        State(false);
-    }
-
+    virtual ~TwoWayHookBase() = default;
     virtual void Switch() = 0;
     virtual void Check() = 0;
 

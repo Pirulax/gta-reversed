@@ -5,8 +5,8 @@
 #include <vector>
 #include <string>
 
-#include "BaseHook.h"
-#include "BasicHook.h"
+#include "TwoWayHookBase.h"
+#include "StaticHook.h"
 #include "VMTRedirectHook.h"
 
 #include <reversiblehooks/VMTInfo.h>
@@ -16,7 +16,7 @@ namespace ReversibleHook {
 /*!
  * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
  */
-struct VirtualHook : public BaseHook {
+struct VirtualHook : public TwoWayHookBase {
     /*!
      * @brief Constructor for hooking virtual functions where the direct call and virtual functions are the same (So basically all virtual functions other than destructors)
      * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
@@ -48,7 +48,10 @@ struct VirtualHook : public BaseHook {
         void*            fnAddressGTA,
         bool             reversed = true
     );
-    ~VirtualHook() override = default;
+
+    ~VirtualHook() override {
+        State(false);
+    }
 
     void        Switch() override;
     void        Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }
@@ -58,7 +61,7 @@ struct VirtualHook : public BaseHook {
     auto        GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
 
 private:
-    BasicHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
+    StaticHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
     VMTRedirectHook m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
 };
 }; // namespace ReversibleHook

@@ -8,7 +8,7 @@
 namespace ReversibleHooks {
 namespace ReversibleHook {
 /*!
- * @brief Handles hooking of virtual destructors (scalar and base, vector is not hooked), including both direct calls and calls that use the VMT. 
+ * @brief 2-way hook that handles hooking of virtual destructors (scalar and base, vector is not hooked), including both direct calls and calls that use the VMT. 
  * @tparam T The class type that has the virtual destructor, used to create a wrapper for calling the destructor.
  */
 template<typename T>
@@ -39,6 +39,10 @@ public:
             reversed
         }
     {
+    }
+
+    ~VirtualDestructorHook() override {
+        State(false);
     }
 };
 }; // namespace ReversibleHook

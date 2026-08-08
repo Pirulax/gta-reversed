@@ -1,18 +1,18 @@
 #include "StdInc.h"
 #include <reversiblehooks/HooksUtility.hpp>
 #include <reversiblehooks/HookConstants.hpp>
-#include "OneWayHook.h"
+#include "StaticOneWayHook.h"
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
-OneWayHook::OneWayHook(
-    std::string           name,
-    void*                 from,
-    void*                 to,
-    std::optional<size_t> numStackArgumentsToPreserve,
-    bool                  preserveRegisters
+StaticOneWayHook::StaticOneWayHook(
+    std::string name,
+    void*       from,
+    void*       to,
+    size_t      numStackArgumentsToPreserve,
+    bool        preserveRegisters
 ) :
-    BaseHook{ std::move(name), HookType::OneWay },
+    m_Name{ name },
     m_From{ from },
     m_To{ to },
     m_NumStackArgumentsToPreserve{ numStackArgumentsToPreserve },
@@ -20,28 +20,39 @@ OneWayHook::OneWayHook(
 {
 }
 
-void OneWayHook::Switch() {
-    m_IsHooked = !m_IsHooked;
+StaticOneWayHook::~StaticOneWayHook() {
+    State(false);
+}
+
+bool StaticOneWayHook::State(bool hooked) {
+    if (hooked == std::exchange(m_IsHooked, hooked)) {
+        return false; // No change
+    }
     if (m_IsHooked) {
         ApplyHook();
     } else {
-        // Only restore if our hook code is still there, otherwise it might've been overwritten by edit&continue
-        // in which case there's no need to restore (because our saved data is invalid)
-        if (memcmp(m_From, m_HookData, m_HookSize) == 0) {
-            RestoreHook();
-        }
+        RestoreHook();
     }
+    return true;
 }
 
-void OneWayHook::Check() {
+void StaticOneWayHook::Check() {
+    if (!m_IsHooked) {
+        return; // Not hooked, nothing to check
+    }
     // Edit & Continue in MSVC works by pointing the address of a function to a `jmp` instruction that jumps to the new function code.
-    // So, if the the addres we modified changes we just copy that back into the `OriginalDataAtHook` buffer and re-apply the hook code.
-    if (m_IsHooked && m_HookSize && memcmp(m_From, m_HookData, m_HookSize) != 0) {
-        ApplyHook(); // Re-apply the hook code, which will overwrite the new `jmp` instruction with our hook code again
+    // We don't know if `from` or `to` is on "our" side, so we check both.
+    // - If it's `from` then the hook might've been overwritten
+    // - if it's `to`, then the `jmp` we followed (See @ref RecalculateAddressJumpTo) might point to a different address than before, so we need to re-generate the hook code.
+    if (memcmp(m_From, m_HookData, m_HookSize) != 0) {
+        ApplyHook();
+    } else if (RecalculateAddressJumpTo()) {
+        GenerateHookCode();
+        ApplyHook(true);
     }
 }
 
-size_t OneWayHook::GenerateHookCodeWithPreservation(size_t localBufferOffset, bool noLocalBuffer) {
+size_t StaticOneWayHook::GenerateHookCodeWithPreservation(size_t localBufferOffset, bool noLocalBuffer) {
     assert((m_NumStackArgumentsToPreserve || m_PreserveRegisters) && "GenerateHookCodeWithPreservation called without any preservation requested");
 
     const auto GenerateHookCode = [this](void* buf, size_t bufSize) {
@@ -50,7 +61,7 @@ size_t OneWayHook::GenerateHookCodeWithPreservation(size_t localBufferOffset, bo
             bufSize,
             m_CalculatedJumpTo,
             m_From,
-            m_NumStackArgumentsToPreserve.value_or(0),
+            m_NumStackArgumentsToPreserve,
             m_PreserveRegisters
         );
     };
@@ -85,7 +96,7 @@ size_t OneWayHook::GenerateHookCodeWithPreservation(size_t localBufferOffset, bo
     return GenerateHookCodeWithPreservation(localBufferOffset, true);
 }
 
-size_t OneWayHook::GenerateHookCode() {
+size_t StaticOneWayHook::GenerateHookCode() {
     assert(m_CalculatedJumpTo && "Must calculate jump address before generating hook code");
 
     const auto GenerateJumpCodeToBuffer = [this](void* to) {
@@ -118,14 +129,16 @@ size_t OneWayHook::GenerateHookCode() {
     return GenerateJumpCodeToBuffer(m_CalculatedJumpTo);
 }
 
-void OneWayHook::RestoreHook() {
+void StaticOneWayHook::RestoreHook() {
     assert(m_HookSize > 0 && "Nothing to restore, was the hook applied at all?");
     Utility::ScopedVirtualProtectModify g{ m_From, m_HookSize, PAGE_EXECUTE_READWRITE };
-    memcpy(m_From, m_RestoreHookData, m_HookSize);
+    if (memcmp(m_From, m_HookData, m_HookSize) == 0) { // Only restore if our hook code is still there, otherwise it might've been overwritten by something already (Eg.: Edit & Continue)
+        memcpy(m_From, m_RestoreHookData, m_HookSize);
+    }
 }
 
-void OneWayHook::ApplyHook() {
-    if (RecalculateAddressJumpTo()) {
+void StaticOneWayHook::ApplyHook(bool skipJumpToReacalculation) {
+    if (!skipJumpToReacalculation && RecalculateAddressJumpTo()) {
         GenerateHookCode();
     }
     Utility::ScopedVirtualProtectModify g{ m_From, m_HookSize, PAGE_EXECUTE_READWRITE };
@@ -133,7 +146,7 @@ void OneWayHook::ApplyHook() {
     memcpy(m_From, m_HookData, m_HookSize);
 }
 
-bool OneWayHook::RecalculateAddressJumpTo() {
+bool StaticOneWayHook::RecalculateAddressJumpTo() {
     const auto jumpTo = Utility::GetJumpToAddress(m_To);
     if (jumpTo) {
         if (jumpTo == m_From) {

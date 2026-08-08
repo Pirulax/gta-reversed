@@ -1,7 +1,7 @@
 #pragma once
 
 #include "ReversibleHooks.h"
-#include "ReversibleHook/BaseHook.h"
+#include "ReversibleHook/TwoWayHookBase.h"
 #include <TristateCheckbox.h>
 #include <ranges>
 #include <vector>
@@ -14,7 +14,7 @@ namespace rng = std::ranges;
 namespace ReversibleHooks {
 class HookCategory {
 public:
-    using Item = std::shared_ptr<ReversibleHook::BaseHook>;
+    using Item = std::shared_ptr<ReversibleHook::TwoWayHookBase>;
     using HooksState = ImGui::ImTristate; // Don't really want to deal with enum conversions so this should do.
     //enum class HooksState {
     //    ALL  = 1, // All hooked

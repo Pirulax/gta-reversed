@@ -1,15 +1,18 @@
 #pragma once 
 
-#include "BaseHook.h"
+#ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
+#include "TwoWayHookBase.h"
 #include "eScriptCommands.h"
 #include "RunningScript.h"
 
-#ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
 namespace ReversibleHooks {
 namespace ReversibleHook {
-struct ScriptCommandHook : BaseHook {
+/*!
+ * @brief 2-way hook for hooking script commands
+ */
+struct ScriptCommandHook : TwoWayHookBase {
     ScriptCommandHook(eScriptCommands command, bool reversed = true, bool enabledByDefault = true) :
-        BaseHook{ std::string{::notsa::script::GetScriptCommandName(command)}, BaseHook::HookType::ScriptCommand, reversed },
+        TwoWayHookBase{ std::string{::notsa::script::GetScriptCommandName(command)}, TwoWayHookBase::HookType::ScriptCommand, reversed },
         m_cmd{command},
         m_originalHandler{CRunningScript::CustomCommandHandlerOf(command)}
     {
@@ -19,7 +22,9 @@ struct ScriptCommandHook : BaseHook {
         }
     }
 
-    ~ScriptCommandHook() override = default;
+    ~ScriptCommandHook() override {
+        State(false);
+    }
 
     void Switch() override {
         using namespace ::notsa::script;
