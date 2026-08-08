@@ -118,11 +118,12 @@ namespace ReversibleHooks {
     };
 
     struct HookInstallOptions {
-        bool reversed{ true };          // Has this function been reversed?
-        bool enabled{ reversed };       // Is this hook enabled (eg.: redirects GTA calls to ours or vice versa if disabled) by default?
-        bool locked{ !reversed };       // If this hook shouldn't be switchable from the GUI
-        int jmpCodeSize{ 5 };
-        int stackArguments{ -1 };
+        bool                  reversed{ true };           //!< Has this function been reversed?
+        bool                  enabled{ reversed };        //!< Is this hook enabled (eg.: redirects GTA calls to ours or vice versa if disabled) by default?
+        bool                  locked{ !reversed };        //!< If this hook shouldn't be switchable from the GUI
+        int                   jmpCodeSize{ 5 };           //!< Unused for now, but it's how much space we have in the gta function to write our hook code
+        std::optional<size_t> StackArgumentsToPreserve{}; //!< Number of stack arguments to preserve
+        bool                  PreserveRegisters{ false }; //!< If enabled registers will be saved accross the call, but it requires `StackArgumentsToPreserve` to be set as well
     };
 
     RootHookCategory& GetRootCategory();

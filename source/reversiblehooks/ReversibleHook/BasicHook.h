@@ -1,60 +1,39 @@
-#pragma once 
+#pragma once
 
 #include <Base.h>
+#include <optional>
 
+#include <reversiblehooks/HookConstants.hpp>
+#include "OneWayHook.h"
 #include "BaseHook.h"
 
-namespace ReversibleHooks{
+namespace ReversibleHooks {
 namespace ReversibleHook {
-
-#pragma pack(push, 1)
-struct SHookContent {
-    uint8  jumpOpCode{(uint8)JUMP_OPCODE};
-    uint32 jumpLocation{};
-    uint8  possibleNops[52 - sizeof(jumpOpCode) - sizeof(jumpLocation)]{};
-};
-#pragma pack(pop)
-VALIDATE_SIZE(SHookContent, 0x34);
-
 /*!
  * @brief Basic hook that inserts a `jmp` at the hooked function and redirects it
  */
-struct BasicHook : BaseHook {
-    // TODO: Refactor this copy-paste and document it
-
-    SHookContent m_HookContent{};
-    uint8        m_OriginalFunctionContent[sizeof(m_HookContent)]{};
-    uint32       m_iHookedBytes{};
-    uint32       m_iRealHookedAddress{}; // Address of GTA function
-
-    SHookContent m_LibHookContent{};
-    uint8        m_LibOriginalFunctionContent[sizeof(m_LibHookContent)]{};
-    uint32       m_iLibHookedBytes{};
-    uint32       m_iLibFunctionAddress{}; // Address of our function
-
-    bool         m_HasAllocatedThunk{}; //!< If we allocated a thunk for this hook (See @ref GenerateECXPreservationThunk)
-
+class BasicHook : public BaseHook {
+public:
     BasicHook(
-        std::string name,
-        uint32 installAddress,
-        void* addressToJumpTo,
-        bool reversed = true,
-        int iJmpCodeSize = 5,
-        int stackArguments = -1
+        std::string_view      name,
+        void*                 fnAddressOur,
+        void*                 fnAddressGTA,
+        bool                  reversed                    = true,
+        std::optional<size_t> numStackArgumentsToPreserve = std::nullopt,
+        bool                  preserveRegisters           = false
     );
+    ~BasicHook() override = default;
 
-    ~BasicHook() override;
-
-    bool CheckLibFnForChangesAndStore(void* expected);
-    void ApplyJumpToGTACode();
-    void GenerateECXPreservationThunk(int stackArguments);
-    auto GetHookGTAAddress() const { return (void*)m_iRealHookedAddress; }
-    auto GetHookOurAddress() const { return (void*)m_iLibFunctionAddress; }
-
-    void        Switch() override;
-    void        Check() override;
+    void Switch() override;
+    void Check() override;
     const char* Symbol() const override { return "S"; }
-};
 
+    auto GetHookGTAAddress() const noexcept { return m_OneWayFromGTA.GetFrom(); }
+    auto GetHookOurAddress() const noexcept { return m_OneWayToGTA.GetFrom(); }
+
+protected:
+    OneWayHook m_OneWayFromGTA; //!< Redirect calls from gta to our code
+    OneWayHook m_OneWayToGTA;   //!< Redirect calls from our code to gta
+};
 };
 };

@@ -168,11 +168,11 @@ void HookInstall(std::string_view category, std::string fnName, void* installAdd
 
     auto item = std::make_shared<ReversibleHook::BasicHook>(
         std::move(fnName),
-        (uint32)installAddress,
         addressToJumpTo,
+        installAddress,
         opt.reversed,
-        opt.jmpCodeSize,
-        opt.stackArguments
+        opt.StackArgumentsToPreserve,
+        opt.PreserveRegisters
     );
     
     item->State(opt.enabled);

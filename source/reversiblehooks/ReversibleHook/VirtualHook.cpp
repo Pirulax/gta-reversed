@@ -31,7 +31,7 @@ VirtualHook::VirtualHook(
 ) :
     BaseHook{ std::string{ name }, HookType::Virtual, reversed },
     m_VirtualDispatchHook{ std::string{ name }, fnVMTEntryOur, fnVMTEntryGTA, reversed },
-    m_DirectCallHook{ std::string{ name }, (uint32)(fnAddressGTA), fnAddressOur, reversed } {
+    m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA, reversed } {
     Switch();
 }
 
