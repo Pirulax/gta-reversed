@@ -172,7 +172,11 @@ void HookInstall(std::string_view category, std::string fnName, void* installAdd
     }
 #endif
 
-    auto item = std::make_shared<ReversibleHook::BasicHook>(
+    // If `PreserveRegisters` then `StackArgumentsToPreserve` may be 0, we just want to enforce it to be set to prevent bugs
+    if (opt.PreserveRegisters && !opt.StackArgumentsToPreserve.has_value()) {
+        throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", category, fnName));
+    }
+
         std::move(fnName),
         addressToJumpTo,
         installAddress,
