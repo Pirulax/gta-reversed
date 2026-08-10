@@ -22,10 +22,10 @@ public:
 
     CTask*    Clone() const override { return new CTaskComplexHitByGunResponse{ *this }; }
     eTaskType GetTaskType() const override { return Type; }
-    bool      MakeAbortable(CPed* ped, eAbortPriority priority = ABORT_PRIORITY_URGENT, const CEvent* event = nullptr) override;
     CTask*    CreateNextSubTask(CPed* ped) override { return nullptr; }
     CTask*    CreateFirstSubTask(CPed* ped) override;
     CTask*    ControlSubTask(CPed* ped) override { return m_pSubTask; }
+    bool      MakeAbortable(CPed* ped, eAbortPriority priority = ABORT_PRIORITY_URGENT, const CEvent* event = nullptr) override;
 
 private: // Wrappers for hooks
     // 0x631DD0

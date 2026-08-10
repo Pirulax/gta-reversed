@@ -6,7 +6,7 @@
 #include "ReversibleHook/ScriptCommandHook.h"
 #endif
 #include "ReversibleHooks.h"
-#include "ReversibleHook/StaticHook.h"
+#include "ReversibleHook/StaticTwoWayHook.h"
 #include "ReversibleHook/VirtualHook.h"
 #include "RootHookCategory.h"
 #include "VMTInfo.h"
@@ -28,30 +28,32 @@ SetCatOrItemStateResult SetCategoryOrItemStateByPath(std::string_view path, bool
     if (path.ends_with("/")) {
         path.remove_suffix(1);
     }
-
-    const auto    separated = SplitStringView(path, "/") | rng::to<std::vector>();
-    HookCategory* cat       = &GetRootCategory();
-    for (auto name : std::span(separated).first(separated.size() - 1)) {
-        cat = cat->FindSubcategory(name);
-        if (!cat) {
-            return SetCatOrItemStateResult::NotFound;
-        }
-    }
-
-    if (auto category = cat->FindSubcategory(separated.back())) {
-        category->SetAllItemsEnabled(enabled);
-        return SetCatOrItemStateResult::Done;
-    } else if (auto item = cat->FindItem(separated.back())) {
-        if (item->GetState() == enabled) {
-            return SetCatOrItemStateResult::Done;
-        }
-        return item->SetState(enabled) ? SetCatOrItemStateResult::Done : SetCatOrItemStateResult::Locked;
-    }
-
-    return SetCatOrItemStateResult::NotFound;
+    NOTSA_UNREACHABLE("TODO");
+    
+    //const auto    separated = SplitStringView(path, "/") | rng::to<std::vector>();
+    //HookCategory* cat       = &GetRootCategory();
+    //for (auto name : std::span(separated).first(separated.size() - 1)) {
+    //    cat = cat->FindSubcategory(name);
+    //    if (!cat) {
+    //        return SetCatOrItemStateResult::NotFound;
+    //    }
+    //}
+    //
+    //if (auto category = cat->FindSubcategory(separated.back())) {
+    //    category->SetAllItemsState(enabled);
+    //    return SetCatOrItemStateResult::Done;
+    //} else if (auto item = cat->FindItem(separated.back())) {
+    //    if (item->GetState() == enabled) {
+    //        return SetCatOrItemStateResult::Done;
+    //    }
+    //    return item->SetState(enabled) ? SetCatOrItemStateResult::Done : SetCatOrItemStateResult::Locked;
+    //}
+    //
+    //return SetCatOrItemStateResult::NotFound;
 }
 
 void CheckAll() {
+    return;
     if (const auto now = HooksCheckClock::now(); now - s_LastHooksCheckTime > HOOKS_CHECK_INTERVAL) {
         s_LastHooksCheckTime = now;
         s_RootCategory.ForEachItem([](HookCategoryItem& item) {
@@ -83,19 +85,30 @@ void InstallVirtual(
 ) {
     const auto idx = vmtInfoGTA.FindIndexOf(fnAddressGTA);
     // We can't do `vmtInfoOur.FindIndexOf(fnAddressOur)` because `fnAddressOur` points to the thunk, while the address in the VMT is pointing to the actual function
-    AddHookToCategory(category, opt, std::make_shared<ReversibleHook::VirtualHook>(
-        std::move(fnName),
-        vmtInfoOur.GetEntryAddressAt(idx),
-#ifdef NOTSA_STANDALONE
-        nullptr
-#else
-        vmtInfoGTA.GetEntryAddressAt(idx)
-#endif
-    ));
+
+    if (opt.Overrides) {
+        AddHookToCategory(category, opt, std::make_shared<ReversibleHook::VirtualHook>(
+            std::move(fnName),
+            vmtInfoOur.GetEntryAddressAt(idx),
+            vmtInfoGTA.GetEntryAddressAt(idx)
+        ));
+    } else {
+        AddHookToCategory(category, opt, std::make_shared<ReversibleHook::VMTRedirectHook>(
+            std::move(fnName),
+            vmtInfoOur.GetEntryAddressAt(idx),
+            vmtInfoGTA.GetEntryAddressAt(idx)
+        ));
+    }
 }
-    
-void AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHookBase> hook) {
-    s_RootCategory.AddItemToNamedCategory(category, { std::move(hook), opt.locked, opt.reversed, opt.enabled, opt.InstallSrcLoc });
+
+void AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook) {
+    s_RootCategory.AddItemToNamedCategory(category, {
+        std::move(hook),
+        opt.Locked,
+        opt.Reversed,
+        opt.State,
+        opt.InstallSrcLoc
+    });
 }
 
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
@@ -115,7 +128,7 @@ void WriteHooksToFile(const std::filesystem::path& file) {
         s_RootCategory.ForEachCategory([&](const HookCategory& cat) {
             using namespace ReversibleHook;
             for (const auto& item : cat.Items()) {
-                if (item.GetType() == TwoWayHookBase::HookType::ScriptCommand) {
+                if (item.GetType() == HookType::ScriptCommand) {
                     continue;
                 }
                 item.PrintToCSV(of, cat);
@@ -146,7 +159,7 @@ void HookInstall(std::string_view category, std::string fnName, void* installAdd
         throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", category, fnName));
     }
 
-    AddHookToCategory(category, opt, std::make_shared<ReversibleHook::StaticHook>(
+    AddHookToCategory(category, opt, std::make_shared<ReversibleHook::StaticTwoWayHook>(
         std::move(fnName),
         addressToJumpTo,
         installAddress,

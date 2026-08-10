@@ -4,12 +4,14 @@
 #include <ranges>
 #include <optional>
 #include <format>
+#include <charconv>
 
 #include <imgui.h>
 #include <libs/imgui/misc/cpp/imgui_stdlib.h>
 
 #include <TristateCheckbox.h>
 
+#include <extensions/utility.hpp>
 #include <reversiblehooks/ReversibleHooks.h>
 #include <reversiblehooks/HookCategory.h>
 
@@ -18,13 +20,17 @@
 
 namespace RH = ReversibleHooks;
 namespace rng = std::ranges;
+using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
+
 using namespace ImGui;
+
+constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
 
 // Clears both filters
 // Making all items visible again is done by `DoFilter`
 void HooksDebugModule::HookFilter::ClearFilters() {
     m_NamespaceTokens.clear(); // Clear only, so allocated memory is kept
-    m_HookName = {};
+    m_HookFilter = {};
 }
 
 // Are we filtering namespaces
@@ -34,7 +40,7 @@ bool HooksDebugModule::HookFilter::IsNamespaceFilterActive() {
 
 // If empty it won't filter anything
 bool HooksDebugModule::HookFilter::IsHookFilterEmpty() {
-    return m_HookName->empty();
+    return m_HookFilter->empty();
 }
 
 // Check if hook filter is present.
@@ -42,7 +48,7 @@ bool HooksDebugModule::HookFilter::IsHookFilterEmpty() {
 // in which case it wouldn't filter out anything.
 // Usually you want to use `IsHookFilterActive` which checks both.
 bool HooksDebugModule::HookFilter::IsHookFilterPresent() {
-    return m_HookName.has_value();
+    return m_HookFilter.has_value();
 }
 
 bool HooksDebugModule::HookFilter::IsHookFilterActive() {
@@ -102,7 +108,21 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
         if (allowFilter && IsHookFilterActive()) {
             cat.m_anyItemsVisible = false;
             for (auto& i : cat.Items()) {
-                const auto matches = StringContainsString(i.GetName(), *m_HookName, m_IsCaseSensitive);
+                auto matches = false;
+                if (m_HookFilterByName) {
+                    matches |= StringContainsString(i.GetName(), *m_HookFilter, m_IsCaseSensitive);
+                }
+                if (m_HookFilterByAddress) {
+                    const auto CheckContainsAddress = [&](void* addr) {
+                        char buf[64];
+                        const auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), (uintptr_t)(addr), 16);
+                        if (ec != std::errc{}) {
+                            return false;
+                        }
+                        return StringContainsString(std::string_view{ buf, end }, *m_HookFilter, false);
+                    };
+                    matches |= CheckContainsAddress(i.GetHookAddressGTA()) || CheckContainsAddress(i.GetHookAddressOur());
+                }
                 i.SetMatchesSearchFilter(matches);
                 cat.m_anyItemsVisible |= matches;
             }
@@ -240,47 +260,47 @@ void HooksDebugModule::HookFilter::OnInputUpdate() {
 
     ClearFilters();
 
-    if (inputsv.empty()) {
-        MakeAllVisibleAndOpen(RH::GetRootCategory(), true, false);
-        return; // No filters
-    }
+    if (!inputsv.empty()) { 
+        // Extract namespace tokens and the hook name filter
+        {
+            const auto sepPos = inputsv.rfind(HOOK_FILTER_SEP);
 
-    // Extract namespace tokens and the hook name filter
-    {
-        const auto sepPos = inputsv.rfind(HOOKNAME_SEP);
+            // First half contains the namespace filter tokens
+            for (auto t : SplitStringView(inputsv.substr(0, sepPos), NAMESPACE_SEP)) {
+                m_NamespaceTokens.emplace_back(t);
+            }
 
-        // First half contains the namespace filter tokens
-        for (auto t : SplitStringView(inputsv.substr(0, sepPos), NAMESPACE_SEP)) {
-            m_NamespaceTokens.emplace_back(t);
+            // Second half (if any) contains the hook/function name filter
+            if (sepPos != std::string_view::npos) {
+                const auto filter     = notsa::trim_string(inputsv.substr(sepPos + HOOK_FILTER_SEP.size()));
+                m_HookFilter          = filter;
+                m_HookFilterByName    = !filter.starts_with("0x");
+                m_HookFilterByAddress = !m_HookFilterByAddress || notsa::try_ston<uintptr>(filter, 16).has_value();
+            }
         }
 
-        // Second half (if any) contains the hook/function name filter
-        if (sepPos != std::string_view::npos) {
-            m_HookName = inputsv.substr(sepPos + HOOKNAME_SEP.size());
+        // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
+        // We have have to remove all the leading empty tokens up until the last empty one.
+        while (m_NamespaceTokens.size() >= 2 && m_NamespaceTokens[0].empty() && m_NamespaceTokens[1].empty()) {
+            m_NamespaceTokens.erase(m_NamespaceTokens.begin());
+        }
+
+        // Don't delete this please //
+        //
+        /*std::cout << "update input: ";
+        for (auto&& t : m_namespaceTokens) {
+        std::cout << '`' << t << "`,";
+        }
+        std::cout << ";" << m_hookFilter.value_or("None") << "\n";*/
+
+        // If we're using the root namespace only but there's no hook filter we practically don't filter anything
+        // Example user inputs: `/`, `/::`, `::`
+        if (IsRelativeToRootNamespace() && m_NamespaceTokens.size() == 1 && IsHookFilterActive()) {
+            ClearFilters();
         }
     }
 
-    // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
-    // We have have to remove all the leading empty tokens up until the last empty one.
-    while (m_NamespaceTokens.size() >= 2 && m_NamespaceTokens[0].empty() && m_NamespaceTokens[1].empty()) {
-        m_NamespaceTokens.erase(m_NamespaceTokens.begin());
-    }
-
-    // Don't delete this please //
-    //
-    /*std::cout << "update input: ";
-    for (auto&& t : m_namespaceTokens) {
-    std::cout << '`' << t << "`,";
-    }
-    std::cout << ";" << m_hookFilter.value_or("None") << "\n";*/
-
-    // If we're using the root namespace only but there's no hook filter we practically don't filter anything
-    // Example user inputs: `/`, `/::`, `::`
-    if (IsRelativeToRootNamespace() && m_NamespaceTokens.size() == 1 && IsHookFilterActive()) {
-        ClearFilters();
-    }
-
-    DoFilter(RH::GetRootCategory());
+    DoFilter(RH::GetRootCategory()); 
 }
 
 void HooksDebugModule::HookFilter::Render() {
@@ -300,23 +320,6 @@ void HooksDebugModule::HookFilter::Render() {
     }
     PopItemWidth();
 }
-template<typename T> 
-struct IDScope_Helper {
-    IDScope_Helper(T id) { PushID(id); }
-    ~IDScope_Helper() { PopID(); }
-};
-
-struct DisabledScope_Helper {
-    DisabledScope_Helper(bool disabled) { BeginDisabled(disabled); }
-    ~DisabledScope_Helper() { EndDisabled(); }
-};
-
-// https://stackoverflow.com/a/17624752
-#define CONCAT(a, b) CONCAT_INNER(a, b)
-#define CONCAT_INNER(a, b) a ## b
-#define UNIQUE_VAR_NAME(base) CONCAT(base, __COUNTER__)
-#define IDScope(id) IDScope_Helper UNIQUE_VAR_NAME(__helper){id}
-#define DisabledScope(disabled) DisabledScope_Helper UNIQUE_VAR_NAME(__helper){disabled}
 
 bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
     if (m_SlideSetter.Mode == SlideSetterMode::NONE || !IsItemHovered()) {
@@ -338,36 +341,148 @@ bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
     return true;
 }
 
+const char* StateToString(HookState state) {
+    switch (state) {
+    case HookState::Unhooked:       return "unhooked";
+    case HookState::RedirectToGTA:  return "gta";
+    case HookState::RedirectToOurs: return "our";
+    default:                        return "unk";
+    }
+}
+
+void StateButton(
+    const char*              title,
+    bool                     disabled,
+    ImTristate               onOffCheckboxState,
+    std::optional<HookState> current,
+    HookState                next,
+    auto&&                   SetState,
+    auto&&                   RestoreState
+) {
+    notsa::ui::ScopedID      idg{ "state" };
+    notsa::ui::ScopedDisable sdg{ disabled };
+
+    SameLine(); 
+    if (bool checked; CheckboxTristate("##on-off", onOffCheckboxState, checked)) {
+        if (checked) {
+            RestoreState();
+        } else {
+            SetState(HookState::Unhooked);
+        }
+    }
+
+    const auto a = (int32)(GetStyle().Colors[ImGuiCol_Button].w * 255.f);
+    PushStyleColor(
+        ImGuiCol_Button,
+        current.transform([a] (HookState state) {
+            switch (state) {
+            case HookState::Unhooked:       return IM_COL32(127, 0, 0, a);  // Red
+            case HookState::RedirectToGTA:  return IM_COL32(69, 69, 69, a); // Dark gray
+            case HookState::RedirectToOurs: return IM_COL32(0, 127, 0, a);  // Green
+            default:                        NOTSA_UNREACHABLE_CASE(state);
+            }
+        }).value_or(IM_COL32(127, 127, 0, a))
+    );
+
+    SameLine(); 
+    if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
+        SetState(next);
+    }
+    PopStyleColor();
+
+    SameLine();
+    TextUnformatted(title);
+
+}
+
+auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false) noexcept {
+    switch (const auto value = last.value_or(HookState::RedirectToOurs)) { // const auto last = last.value_or(OverallState().value_or(HookState::RedirectToOurs))
+    case HookState::RedirectToOurs: return HookState::RedirectToGTA;
+    case HookState::RedirectToGTA:  return withUnhooked ? HookState::Unhooked : HookState::RedirectToOurs;
+    case HookState::Unhooked:       return HookState::RedirectToOurs;
+    default:                        NOTSA_UNREACHABLE_CASE(value);
+    }
+}
+
 void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
     for (auto& item : cat.Items()) {
         if (!item.GetMatchesSearchFilter()) {
             continue;
         }
 
-        // Use hook's address as unique ID - Hooks aren't dynamically created, so this should really be unique
-        IDScope(&item);
+        notsa::ui::ScopedID idg{ item.GetName() };
 
         // Draw hook symbol
         {
             PushStyleVar(ImGuiStyleVar_Alpha, GetStyle().Alpha * 0.5f);
             AlignTextToFramePadding();
-            Text(item.GetSymbol());
+            Text(item.GetTypeSymbolUI());
             PopStyleVar();
         }
 
         // State checkbox
         {
-            IDScope("state");
-            DisabledScope(item.GetIsStateLocked());
+            StateButton(
+                item.GetName().c_str(),
+                item.GetIsStateLocked(),
+                item.GetState() == HookState::Unhooked
+                    ? ImTristate::NONE
+                    : ImTristate::ALL,
+                item.GetState(),
+                item.GetState() == HookState::RedirectToOurs
+                    ? HookState::RedirectToGTA
+                    : HookState::RedirectToOurs,
+                [&](HookState s) { cat.SetItemState(item, s); },
+                [&]() { cat.SetItemState(item, item.GetPreviousState()); }
+            );
 
-            bool hooked{ item.GetState() };
+            //IDScope("state");
+            //DisabledScope(item.GetIsStateLocked());
 
-            if (SameLine(); Checkbox(item.GetName().c_str(), &hooked) && !item.GetIsStateLocked()) {
-                cat.SetItemEnabled(item, hooked);
-            }
-            if (!item.GetIsStateLocked() && HandleSlideSetterForItem(hooked)) {
-                cat.SetItemEnabled(item, hooked);
-            }
+
+            //SameLine(); 
+            //bool checked        = item.GetState() != HookState::Unhooked;
+            //if (Checkbox("##on-off", &checked)) {
+            //    cat.SetItemState(item, checked ? item.GetPreviousState() : HookState::Unhooked);
+            //}
+            //
+            //SameLine();
+            //const auto next = item.GetState() == HookState::RedirectToOurs
+            //    ? HookState::RedirectToGTA
+            //    : HookState::RedirectToOurs;
+            //if (Button(StateToString(item.GetState()), STATE_BUTTON_SIZE) && !item.GetIsStateLocked()) {
+            //    cat.SetItemState(item, next);
+            //}
+            //if (!item.GetIsStateLocked() && IsItemHovered()) {
+            //    SetTooltip("Change to: %s", StateToString(next));
+            //}
+            //
+            //SameLine();
+            //TextUnformatted(item.GetName().c_str());
+
+
+            //if (SameLine(); CheckboxTristate(item.GetName().c_str(), item.GetStateUI(), checked) && !item.GetIsStateLocked()) { 
+            //    cat.SetItemState(item,
+            //        IsKeyDown(ImGuiMod_Alt)
+            //            ? HookState::Unhooked
+            //            : checked
+            //                ? HookState::RedirectToOurs
+            //                : HookState::RedirectToGTA
+            //    );
+            //}
+            //if (IsItemHovered()) {
+            //    SetTooltip(
+            //        "Currently state: %s"
+            //        "Left click: Redirect to Our/GTA code\n"
+            //        "Left click + Alt: Unhook\n"
+            //        "Middle click: Toggle (Slide setter)\n"
+            //        "Right click + hold: Slide setter (Enable/disable all hovered items)\n",
+            //        EnumToString(item.GetState()).value_or("Unknown")
+            //    );
+            //}
+            //if (!item.GetIsStateLocked() && HandleSlideSetterForItem(checked)) {
+            //    cat.SetItemState(item, checked ? HookState::RedirectToOurs : HookState::RedirectToGTA);
+            //}
         }
 
         if (!IsItemHovered()) {
@@ -400,46 +515,80 @@ void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
     if (!cat.Visible()) {
         return;
     }
+    notsa::ui::ScopedID idg{ cat.Name() };
 
-    // We copy ImGui style here to alter it for indication.
-    const auto styleRestore = ImGui::GetStyle();
-    auto& style = ImGui::GetStyle();
-
-    // NOTE: Won't work properly if `cat::m_items`s type is changed from `std::list`
-    // Using this instead of the name as it's faster than encoding a string (And we care about performance, since this is mostly run in debug mode)
-    IDScope(&cat);
-
-    const auto& name = cat.Name();
-
-    // TODO: Replace with `TreeNodeWithTriStateCheckBox`
-    //! returns tuple<bool open, bool cbStateChanged, bool cbState>
-    const auto TreeNodeWithCheckbox = [](auto label, ImTristate triState, bool disabled) {
+    const auto TreeNodeWithCheckbox = [](
+        auto                                            label,
+        bool                                            disabled,
+        bool                                            hasAnyUnhooked,
+        ReversibleHooks::HookCategory::CommonItemsState commonState,
+        HookState                                       next,
+        auto&&                                          SetState,
+        auto&&                                          RestoreState
+    ) {
         // TODO/NOTE: The Tree's label is a workaround for when the label is shorter than the visual checkbox (otherwise the checkbox can't be clicked)
         const auto open = TreeNodeEx("##         ", ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanFullWidth);
         
         SameLine();
+        StateButton(
+            label,
+            disabled,
+            commonState == HookState::Unhooked
+                ? ImTristate::NONE
+                : hasAnyUnhooked
+                    ? ImTristate::MIXED
+                    : ImTristate::ALL,
+            commonState,
+            next,
+            SetState,
+            RestoreState
+        );
 
         // Tree is never disabled, otherwise it couldn't be opened
-        DisabledScope(disabled);
+        //DisabledScope(disabled);
+        //
+        //// Checkbox + it's label will be the tree name
+        //bool cbState{ commonState.has_value() };
+        //const auto stateChanged = Checkbox(label, &cbState);
+        //
+        //if (SameLine(); Button(commonState.has_value() ? StateToString(*commonState) : "mixed")) {
+        //    cbState = !cbState;
+        //}
 
-        // Checkbox + it's label will be the tree name
-        bool cbState{};
-        const auto stateChanged = CheckboxTristate(label, triState, cbState);
+        //if (IsItemHovered()) {
+        //    SetTooltip(
+        //        "Left click: Redirect to Our/GTA code\n"
+        //        "Left click + Alt: Unhook\n"
+        //        "Middle click: Toggle (Slide setter)\n"
+        //        "Right click + hold: Slide setter (Enable/disable all hovered items)\n"
+        //    );
+        //}
 
-        return std::make_tuple(open, stateChanged, cbState);
+        return std::make_tuple(open, false);
     };
 
     // Disable all hooks in category at once
     {
         SetNextItemOpen(cat.Open());
 
-        const auto [open, stateChanged, cbState] = TreeNodeWithCheckbox(cat.Name().c_str(), cat.OverallState(), cat.Disabled());
-        if (stateChanged) {
-            cat.ToggleAllItemsState();
-        }
-        if (bool state = cbState; HandleSlideSetterForItem(state)) {
-            cat.SetAllItemsEnabled(state);
-        }
+
+        const auto [open, stateChanged] = TreeNodeWithCheckbox(
+            cat.Name().c_str(),
+            cat.Disabled(),
+            cat.HasAnyUnhooked(),
+            cat.OverallState(),
+            cat.OverallState().value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+                ? HookState::RedirectToGTA
+                : HookState::RedirectToOurs,
+            [&](HookState s) { cat.SetAllItemsState(s); },
+            [&] () { cat.SetAllItemsToPreviousState(); }
+        );
+        //if (stateChanged) {
+        //    cat.ToggleAllItemsState();
+        //}
+        //if (bool state = cbState; HandleSlideSetterForItem(state)) {
+        //    cat.SetAllItemsState(state);
+        //}
         cat.Open(open);
     }
 
@@ -455,12 +604,23 @@ void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
     if (!cat.Items().empty() && cat.m_anyItemsVisible) {
         if (cat.SubCategories().empty()) { // If there are no subcategories we can draw all items directly
             RenderCategoryItems(cat);
-        } else { // Otherwise use a tree node + checkbox
-            const auto [open, stateChanged, cbState] = TreeNodeWithCheckbox("Hooks", cat.ItemsState(), cat.ItemsDisabled());
+        } else { // Otherwise use a tree node + checkbox for them
+            const auto [open, stateChanged] = TreeNodeWithCheckbox(
+                "Hooks",
+                cat.ItemsDisabled(),
+                cat.m_AnyOurItemsUnhooked,
+                cat.ItemsState(),
+                cat.ItemsState().value_or(cat.m_LastSetOurState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+                    ? HookState::RedirectToGTA
+                    : HookState::RedirectToOurs,
+                [&](HookState s) { cat.SetOurItemsState(s); },
+                [&] () { cat.SetOurItemsToPreviousState(); }
+            );
 
             if (stateChanged) {
                 //cat.SetOurItemsState(cbState);
-                cat.ToggleAllItemsState();
+                //cat.ToggleAllItemsState();
+                NOTSA_UNREACHABLE("todo");
             }
 
             if (open) {

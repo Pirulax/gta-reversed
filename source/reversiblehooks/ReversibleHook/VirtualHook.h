@@ -5,8 +5,8 @@
 #include <vector>
 #include <string>
 
-#include "TwoWayHookBase.h"
-#include "StaticHook.h"
+#include "TwoWayHook.h"
+#include "StaticTwoWayHook.h"
 #include "VMTRedirectHook.h"
 
 #include <reversiblehooks/VMTInfo.h>
@@ -16,7 +16,7 @@ namespace ReversibleHook {
 /*!
  * @brief Handles hooking of virtual functions, including both direct calls and calls that use the VMT.
  */
-struct VirtualHook : public TwoWayHookBase {
+struct VirtualHook : public TwoWayHook {
     /*!
      * @brief Constructor for hooking virtual functions where the direct call and virtual functions are the same (So basically all virtual functions other than destructors)
      * @param name Name of the function (eg.: `Add` for `CEntity::Add`)
@@ -46,17 +46,21 @@ struct VirtualHook : public TwoWayHookBase {
     );
 
     ~VirtualHook() override {
-        State(false);
+        State(TwoWayHookState::Unhooked);
     }
 
-    void Switch() override;
-    void Check() override { m_DirectCallHook.Check(); m_VirtualDispatchHook.Check(); }
-    auto GetHookGTAAddress() const { return m_DirectCallHook.GetHookGTAAddress(); }
-    auto GetHookOurAddress() const { return m_DirectCallHook.GetHookOurAddress(); }
+    HookType Type() const noexcept override { return HookType::Virtual; }
+    void Check() final override;
+
+    void* GetHookAddressGTA() const noexcept override { return m_DirectCallHook.GetHookAddressGTA(); }
+    void* GetHookAddressOur() const noexcept override { return m_DirectCallHook.GetHookAddressOur(); }
+
+protected:
+    void ApplyNewState(TwoWayHookState state, TwoWayHookState oldState) final override;
 
 private:
-    StaticHook      m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
-    VMTRedirectHook m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
+    StaticTwoWayHook m_DirectCallHook;      //!< For direct calls (Eg.: Explicit calls like `Class::VirtualFunction()`)
+    VMTRedirectHook  m_VirtualDispatchHook; //!< For calls that use the VMT (Eg.: `object->VirtualFunction()`)
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks

@@ -16,6 +16,7 @@ template<typename T>
 struct VirtualDestructorHook final : public VirtualHook {
 private:
     static constexpr auto DESTRUCTOR_VMT_INDEX = 0;
+
 public:
     /*!
      * @brief Constructor for hooking virtual destructors where the direct call and virtual functions aren't the same (For example destructors vs deleting virtual destructor)
@@ -38,9 +39,7 @@ public:
     {
     }
 
-    ~VirtualDestructorHook() override {
-        State(false);
-    }
+    HookType Type() const noexcept override { return HookType::VirtualDestructor; }
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks

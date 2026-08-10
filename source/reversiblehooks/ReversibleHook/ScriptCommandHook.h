@@ -1,43 +1,45 @@
 #pragma once 
 
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
-#include "TwoWayHookBase.h"
 #include "eScriptCommands.h"
 #include "RunningScript.h"
+
+#include "TwoWayHook.h"
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
 /*!
- * @brief 2-way hook for hooking script commands
+ * @brief Script commands hook
+ * @note  There's no real `unhooked` state, because either all calls go to our handler or to the gta one, no in-between
  */
-struct ScriptCommandHook : TwoWayHookBase {
-    ScriptCommandHook(eScriptCommands command, bool enabledByDefault = true) :
-        TwoWayHookBase{ std::string{::notsa::script::GetScriptCommandName(command)}, TwoWayHookBase::HookType::ScriptCommand },
-        m_cmd{command},
-        m_originalHandler{CRunningScript::CustomCommandHandlerOf(command)}
+struct ScriptCommandHook final : public TwoWayHook {
+    ScriptCommandHook(eScriptCommands command) :
+        TwoWayHook{ std::string{::notsa::script::GetScriptCommandName(command)} },
+        m_Command{command},
+        m_OriginalHandler{CRunningScript::CustomCommandHandlerOf(command)}
     {
-        m_IsHooked = true; // Enabled by default
-        if (m_IsHooked && !enabledByDefault) {
-            Switch(); // Uninstall it
-        }
     }
 
     ~ScriptCommandHook() override {
-        State(false);
+        State(TwoWayHookState::Unhooked);
     }
 
-    void Switch() override {
-        using namespace ::notsa::script;
+    HookType Type() const noexcept override { return HookType::ScriptCommand; }
+    void     Check() override { /* nop */ }
 
-        m_IsHooked = !m_IsHooked;
-        CRunningScript::CustomCommandHandlerOf(m_cmd) = m_IsHooked ? m_originalHandler : nullptr;
+    void* GetHookAddressGTA() const noexcept override { return m_OriginalHandler; }
+    void* GetHookAddressOur() const noexcept override { return CRunningScript::CustomCommandHandlerOf(m_Command); }
+
+protected:
+    void ApplyNewState(TwoWayHookState state, TwoWayHookState oldState) override {
+        CRunningScript::CustomCommandHandlerOf(m_Command) = state == TwoWayHookState::RedirectToOurs
+            ? m_OriginalHandler 
+            : nullptr;
     }
-
-    void Check() override { /* nop */ }
 
 private:
-    eScriptCommands                         m_cmd{};
-    ::notsa::script::CommandHandlerFunction m_originalHandler{};
+    eScriptCommands                         m_Command{};
+    ::notsa::script::CommandHandlerFunction m_OriginalHandler{};
 };
 };
 };

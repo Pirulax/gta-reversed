@@ -2,12 +2,14 @@
 
 #include <Base.h>
 
+#include "OneWayHook.h"
+
 namespace ReversibleHooks {
 namespace ReversibleHook {
 /*!
  * @brief Hook that does hooking in 1 way only
  */
-class StaticOneWayHook {
+class StaticOneWayHook final : public OneWayHook {
     using HookData = std::byte[Constants::MAX_HOOK_DATA_SIZE];
 
 public:
@@ -28,10 +30,13 @@ public:
     ~StaticOneWayHook();
 
     void Check();
-    bool State(bool hooked);
 
     void* GetTo() const noexcept { return m_To; }
     void* GetFrom() const noexcept { return m_From; }
+
+protected:
+    void ApplyNewState(bool state, bool oldState) override;
+    HookType Type() const noexcept override { return HookType::StaticOneWay; }
 
 protected:
     /*!
@@ -63,7 +68,6 @@ protected:
     bool RecalculateAddressJumpTo();
 
 protected:
-    std::string         m_Name{};                        //!< Hook name
     void*               m_From{};                        //!< Address we redirect from, this is where the hook is installed
     void*               m_To{};                          //!< The addres we want to jump to (If this itself is just a jump instruction, we will optimize it, see @ref Utility::GetJumpToAddress)
     void*               m_CalculatedJumpTo{};            //!< The address the hook actually jumps to (See @ref Utility::GetJumpToAddress)

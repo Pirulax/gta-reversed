@@ -1,4 +1,5 @@
 #include "StdInc.h"
+
 #include "CommandLine.h"
 
 #include <span>
@@ -15,6 +16,9 @@ fs::path s_DumpHooksPath{};
 
 /* Wait for debugger before continuing */
 bool s_WaitForDebugger{ false };
+
+/* exe path */
+fs::path s_ExePath{};
 
 void ProcessArgument(std::string_view arg) {
     if (arg == "--debug") {
@@ -65,9 +69,15 @@ void ProcessArgument(std::string_view arg) {
 
 void CommandLine::Load(int argc, char** argv) {
     NOTSA_LOG_DEBUG("[Command Line]: Loading arguments");
+    s_ExePath = argv[0];
     for (int32 i = 1; i < argc; i++) { // Skip first 'argument' which is the exec path.
         ProcessArgument(argv[i]);
     }
     NOTSA_LOG_DEBUG("[Command Line]: Arguments loaded");
 }
+
+fs::path GetExePath() {
+    return s_ExePath;
+}
+
 } // namespace CommandLine

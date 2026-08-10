@@ -6,40 +6,27 @@
 #include "HookCategoryItem.h"
 
 namespace ReversibleHooks {
-void* HookCategoryItem::GetHookAddressGTA() const noexcept {
-    using namespace ReversibleHook;
-    switch (m_Hook->Type()) {
-    case TwoWayHookBase::HookType::Virtual:
-        return std::static_pointer_cast<VirtualHook>(m_Hook)->GetHookGTAAddress();
-    case TwoWayHookBase::HookType::Static:
-        return std::static_pointer_cast<StaticHook>(m_Hook)->GetHookGTAAddress();
-    default:
-        return nullptr;
+bool HookCategoryItem::SetState(HookState state, bool ignoreLock) {
+    if (!ignoreLock && m_IsStateLocked) {
+        return false;
     }
+    assert((m_IsReversed || state == HookState::RedirectToGTA) && "Hooks for functions not `reversed` should redirect to gta");
+    const auto prev = m_Hook->State();
+    if (!m_Hook->State(state)) {
+        return false;
+    }
+    m_PrevState = prev;
+    return true;
 }
 
-void* HookCategoryItem::GetHookAddressOur() const noexcept {
-    using namespace ReversibleHook;
-    switch (m_Hook->Type()) {
-    case TwoWayHookBase::HookType::Virtual:
-        return std::static_pointer_cast<VirtualHook>(m_Hook)->GetHookOurAddress();
-    case TwoWayHookBase::HookType::Static:
-        return std::static_pointer_cast<StaticHook>(m_Hook)->GetHookOurAddress();
-    default:
-        return nullptr;
-    }
-}
-
-const char* HookCategoryItem::GetSymbol() const noexcept {
-    switch (m_Hook->Type()) {
-    case ReversibleHook::TwoWayHookBase::HookType::Virtual:
-        return "V";
-    case ReversibleHook::TwoWayHookBase::HookType::Static:
-        return "S";
-    case ReversibleHook::TwoWayHookBase::HookType::ScriptCommand:
-        return "SC";
-    default:
-        return nullptr;
+const char* HookCategoryItem::GetTypeSymbolUI() noexcept {
+    using enum ReversibleHook::HookType;
+    switch (GetType()) {
+    case StaticTwoWay:      return "S";
+    case Virtual:           return "V";
+    case VirtualDestructor: return "VD";
+    case VMTRedirect:       return "VR";
+    default:                return "U";
     }
 }
 

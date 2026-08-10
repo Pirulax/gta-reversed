@@ -5,14 +5,14 @@
 
 #include <reversiblehooks/HookConstants.hpp>
 #include "StaticOneWayHook.h"
-#include "TwoWayHookBase.h"
+#include "TwoWayHook.h"
 
 namespace ReversibleHooks {
 namespace ReversibleHook {
 /*!
  * @brief 2-way hook used for static (that is non-virtual) functions
  */
-class StaticHook final : public TwoWayHookBase {
+class StaticTwoWayHook final : public TwoWayHook {
 public:
     /*!
      * @brief Constructor for hooking static functions
@@ -22,22 +22,26 @@ public:
      * @param numStackArgumentsToPreserve Number of stack arguments to preserve (if any)
      * @param preserveRegisters Whether to preserve registers (if true, must specify `numStackArgumentsToPreserve`)
      */
-    StaticHook(
+    StaticTwoWayHook(
         std::string_view name,
         void*            fnAddressOur,
         void*            fnAddressGTA,
         size_t           numStackArgumentsToPreserve = 0,
         bool             preserveRegisters           = false
     );
-    ~StaticHook() override {
-        State(false);
+
+    ~StaticTwoWayHook() override {
+        State(TwoWayHookState::Unhooked);
     }
 
-    void Switch() override;
-    void Check() override;
+    HookType Type() const noexcept override { return HookType::StaticTwoWay; }
+    void     Check() override;
 
-    auto GetHookGTAAddress() const noexcept { return m_OneWayFromGTA.GetFrom(); }
-    auto GetHookOurAddress() const noexcept { return m_OneWayToGTA.GetFrom(); }
+    void* GetHookAddressGTA() const noexcept override { return m_OneWayFromGTA.GetFrom(); }
+    void* GetHookAddressOur() const noexcept override { return m_OneWayToGTA.GetFrom(); }
+
+protected:
+    void ApplyNewState(TwoWayHookState state, TwoWayHookState oldState) override;
 
 protected:
     StaticOneWayHook m_OneWayFromGTA; //!< Redirect calls from gta to our code

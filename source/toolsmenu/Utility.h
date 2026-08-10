@@ -72,6 +72,13 @@ struct ScopedID {
     ~ScopedID() { ImGui::PopID(); }
 };
 
+template<typename T>
+    requires std::convertible_to<T, std::string_view>
+struct ScopedID<T> {
+    ScopedID(const std::string_view& id) { ImGui::PushID(id.data(), id.data() + id.size()); }
+    ~ScopedID() { ImGui::PopID(); }
+};
+
 struct ScopedDisable {
     ScopedDisable(bool disable) { ImGui::BeginDisabled(disable); }
     ~ScopedDisable()            { ImGui::EndDisabled(); }

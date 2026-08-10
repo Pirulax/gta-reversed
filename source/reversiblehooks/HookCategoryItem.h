@@ -4,20 +4,21 @@
 #include <memory>
 #include <source_location>
 
-#include <reversiblehooks/ReversibleHook/TwoWayHookBase.h>
+#include <reversiblehooks/ReversibleHook/TwoWayHook.h>
 
 namespace ReversibleHooks {
 class HookCategory;
 
 class HookCategoryItem {
-    using HookPtr = std::shared_ptr<ReversibleHook::TwoWayHookBase>;
+    using HookPtr   = std::shared_ptr<ReversibleHook::TwoWayHook>;
+    using HookState = ReversibleHook::TwoWayHookState;
 
 public:
     HookCategoryItem(
         HookPtr              hook,
         bool                 isLocked,
         bool                 isReversed,
-        bool                 isEnabled,
+        HookState            state,
         std::source_location installSrcLoc
     ) :
         m_Hook{ std::move(hook) },
@@ -25,8 +26,7 @@ public:
         m_IsReversed{ isReversed },
         m_InstallSrcLoc{ std::move(installSrcLoc) }
     {
-        assert((m_IsReversed || !isEnabled) && "Hooks for functions not `reversed` should not be `enabled`");
-        SetState(isEnabled, true);
+        SetState(state, true);
     }
 
     /*!
@@ -37,7 +37,7 @@ public:
     /*!
      * @return Hook's current state
      */
-    bool GetState() const { return m_Hook->Hooked(); }
+    auto GetState() const { return m_Hook->State(); }
 
     /*!
      * @brief Set state of hook
@@ -45,7 +45,22 @@ public:
      * @param ignoreLock if true, will ignore the lock and set the state regardless of it
      * @return If the state has changed
      */
-    bool SetState(bool state, bool ignoreLock = false) { return (ignoreLock || !m_IsStateLocked) && m_Hook->State(state); }
+    bool SetState(HookState state, bool ignoreLock = false);
+
+    /*!
+     * @return Symbol to use for the hook in the UI
+     */
+    const char* GetTypeSymbolUI() noexcept;
+
+    /*!
+     * @brief Restore to previous state
+     */
+    bool SetToPreviousState() { return SetState(m_PrevState); }
+
+    /*!
+     * @returns The previous state of the hook (before the last change)
+     */
+    auto GetPreviousState() const noexcept { return m_PrevState; }
 
     /*!
      * @return If the hook should be shown in the UI 
@@ -76,17 +91,12 @@ public:
     /*!
      * @return Hook's address in GTA's code (nullptr if not applicable)
      */
-    void* GetHookAddressGTA() const noexcept;
+    void* GetHookAddressGTA() const noexcept { return m_Hook->GetHookAddressGTA(); }
 
     /*!
      * @return Hook's address in our code (nullptr if not applicable)
      */
-    void* GetHookAddressOur() const noexcept;
-
-    /*!
-     * @return Hook's symbol (nullptr if not applicable)
-     */
-    const char* GetSymbol() const noexcept;
+    void* GetHookAddressOur() const noexcept { return m_Hook->GetHookAddressOur(); }
 
     /*!
      * @brief Prints the hook to a CSV file (Format: `class,fn_name,address,reversed,locked,type`)
@@ -96,6 +106,7 @@ public:
     void PrintToCSV(std::ofstream& ofs, const HookCategory& cat) const noexcept;
 
 protected:
+    HookState            m_PrevState{};
     std::source_location m_InstallSrcLoc;              //!< Source location where the hook was installed
     HookPtr              m_Hook;                       //!< The hook
     bool                 m_IsReversed : 1 {};          //!< Is re'd?

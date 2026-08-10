@@ -3,6 +3,7 @@
 #include <charconv>
 #include <initializer_list>
 #include <Vector.h>
+#include <optional>
 #include <unordered_map>
 #include "Base.h"
 #include <game_sa/Timer.h>
@@ -120,10 +121,12 @@ T coalesce(T a, T b) {
 * @param end   The end of the the number in the string (points to inside `sv`)
 */
 template<std::integral T>
-T ston(std::string_view str, int radix = 10, const char** end = nullptr) {
+std::optional<T> try_ston(std::string_view str, int radix = 10, const char** end = nullptr) {
     T out;
     const auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out, radix);
-    assert(ec == std::errc{});
+    if (ec != std::errc{}) {
+        return std::nullopt;
+    }
     if (end) {
         *end = ptr;
     }
@@ -138,10 +141,12 @@ T ston(std::string_view str, int radix = 10, const char** end = nullptr) {
 */
 template<typename T>
     requires std::is_floating_point_v<T>
-T ston(std::string_view str, std::chars_format fmt = std::chars_format::general, const char** end = nullptr) {
+std::optional<T> try_ston(std::string_view str, std::chars_format fmt = std::chars_format::general, const char** end = nullptr) {
     T out;
     const auto [ptr, ec] = std::from_chars(str.data(), str.data() + str.size(), out, fmt);
-    assert(ec != std::errc{});
+    if (ec != std::errc{}) {
+        return std::nullopt;
+    }
     if (end) {
         *end = ptr;
     }
@@ -472,6 +477,18 @@ template<std::integral T>
 T round_up_to_multiple(T value, T multiple) {
     assert(multiple > 0);
     return ((value + multiple - 1) / multiple) * multiple;
+}
+
+template<typename F, typename R, typename... Args>
+concept invocable_returning = std::invocable<F, Args...> && std::same_as<std::invoke_result_t<F, Args...>, R>;
+
+inline std::string_view trim_string(std::string_view str, std::string_view space = " \t\n\r") {
+    const auto first = str.find_first_not_of(space);
+    if (first == std::string_view::npos) {
+        return {};
+    }
+    const auto last = str.find_last_not_of(space);
+    return str.substr(first, last - first + 1);
 }
 
 }; // namespace notsa

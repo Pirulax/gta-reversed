@@ -1,7 +1,7 @@
 #include "StdInc.h"
 #include "config.h"
 #include <cstdlib>
-
+#include <app_debug.h>
 #include "WinPlatform.h"
 #include "extensions/CommandLine.h"
 #include "extensions/debug.hpp"
@@ -41,7 +41,7 @@ static void ApplyCommandLineHookSettings() {
     };
 
     if (CommandLine::s_UnhookAll || !CommandLine::s_UnhookExcept.empty()) {
-        GetRootCategory().SetAllItemsEnabled(false);
+        GetRootCategory().SetAllItemsState(ReversibleHooks::ReversibleHook::TwoWayHookState::RedirectToGTA);
 
         NOTSA_LOG_DEBUG("Unhooked all via command-line");
         for (const auto& item : CommandLine::s_UnhookExcept) {
@@ -82,11 +82,14 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         std::setlocale(LC_ALL, "en_US.UTF-8");
 
-        notsa::debug::DisplayConsole();
         CommandLine::Load(__argc, __argv);
         if (CommandLine::s_WaitForDebugger) {
             notsa::debug::WaitForDebugger();
         }
+
+        notsa::debug::DisplayConsole();
+        notsa::debug::InitializeSymbols();
+        notsa::Logging::CreateInstance();
 
         LoadConfigurations();
 

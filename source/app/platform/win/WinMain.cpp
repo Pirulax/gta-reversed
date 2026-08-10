@@ -498,11 +498,13 @@ INT WINAPI NOTSA_WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdL
 
 #ifdef NOTSA_STANDALONE
 INT WINAPI WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, INT nCmdShow) {
-    notsa::debug::DisplayConsole();
     CommandLine::Load(__argc, __argv);
     if (CommandLine::s_WaitForDebugger) {
         notsa::debug::WaitForDebugger();
     }
+    notsa::debug::DisplayConsole();
+    notsa::debug::InitializeSymbols();
+    notsa::Logging::CreateInstance();
 #ifdef NOTSA_DUMP_HOOKS_ONLY
     NOTSA_LOG_INFO("Dumping hooks only, no memory writing will be performed");
     if (CommandLine::s_DumpHooksPath.empty()) {
@@ -526,11 +528,11 @@ void InjectWinMainStuff() {
     RH_ScopedGlobalInstall(IsAlreadyRunning, 0x7468E0);
 
     // Unhooking these 2 after the game has started will do nothing
-    RH_ScopedGlobalInstall(NOTSA_WinMain, 0x748710, {.locked = true});
-    RH_ScopedGlobalInstall(MessageLoop, 0x746870, {.locked = true});
+    RH_ScopedGlobalInstall(NOTSA_WinMain, 0x748710, {.Locked = true});
+    RH_ScopedGlobalInstall(MessageLoop, 0x746870, {.Locked = true});
 
 #ifndef NOTSA_USE_SDL3
     RH_ScopedGlobalInstall(Win32_InitApplication, 0x7486A0);
-    RH_ScopedGlobalInstall(Win32_InitInstance, 0x745560, {.locked = true});
+    RH_ScopedGlobalInstall(Win32_InitInstance, 0x745560, {.Locked = true});
 #endif
 }

@@ -17,4 +17,6 @@ namespace CommandLine {
     extern bool s_WaitForDebugger;
 
     void Load(int argc, char** argv);
+
+    fs::path GetExePath();
 } // namespace CommandLine;

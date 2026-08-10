@@ -41,5 +41,18 @@ inline void DisplayConsole() {
     VERIFY(freopen_s(&fs, "CONOUT$", "w", stdout) == NOERROR);
     VERIFY(freopen_s(&fs, "CONOUT$", "w", stderr) == NOERROR);
 }
+
+/*!
+ * @brief Get function information (module, function name, line number) at the given address.
+ * @return 
+ */
+std::string GetFunctionInfoAtAddress(uintptr_t address, HANDLE hProcess = INVALID_HANDLE_VALUE);
+
+/*!
+ * @brief Initialize debugging symbols
+ * @note Call after the CommandLine has initialized, as it uses the exe path to initialize symbols.
+ */
+void InitializeSymbols();
+
 };
 };

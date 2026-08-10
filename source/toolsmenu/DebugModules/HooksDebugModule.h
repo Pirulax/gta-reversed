@@ -18,7 +18,14 @@ class HooksDebugModule final : public DebugModule {
 private:
     class HookFilter {
         static constexpr std::string_view NAMESPACE_SEP{ "/" };
-        static constexpr std::string_view HOOKNAME_SEP{ "::" };
+        static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
+
+        enum HookFilterMode {
+            NONE,
+            BY_NAME,
+            BY_ADDRESS,
+            BY_NAME_AND_ADDRESS
+        };
 
     public:
         void Render();
@@ -55,10 +62,16 @@ private:
         //! - `///` - 4 empty strings
         std::vector<std::string_view> m_NamespaceTokens{};
 
-        //! Filter of hook name
-        //! If `nullopt` means there was no `::` (HOOKNAME_SEP) in the user input
+        //! Filter of hook name or/and address (in hex form)
+        //! If `nullopt` means there was no `::` (HOOK_FILTER_SEP) in the user input
         //! otherwise if there was, it contains whatever was after it (Which might be nothing - So the string is empty)
-        std::optional<std::string_view> m_HookName{};
+        std::optional<std::string_view> m_HookFilter{};
+
+        //! If `m_HookFilter` is address-like (hex format required) and should be used to filter by address (as well)
+        bool m_HookFilterByAddress{};
+
+        //! If `m_HookFilter` should be used to filter by name (as well)
+        bool m_HookFilterByName{};
     };
 
 public:

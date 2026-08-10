@@ -8,7 +8,7 @@
 #include "RootHookCategory.h"
 #include "HookSystem.h"
 #include <Enums/eScriptCommands.h>
-#include "ReversibleHook/TwoWayHookBase.h"
+#include "ReversibleHook/TwoWayHook.h"
 #include "ReversibleHook/VirtualDestructorHook.h"
 #include "VMTInfo.h"
 #include "HooksUtility.hpp"
@@ -22,20 +22,24 @@
 
 // Set scoped namespace name (This only works if you only use `ScopedGlobal` macros)
 #define RH_ScopedNamespaceName(ns) \
+    using HS = ReversibleHooks::HookInstallOptions::HS; \
     ReversibleHooks::ScopeName RHCurrentScopeName {ns};
 
 // Use when `name` is a class
 #define RH_ScopedClass(cls) \
     using RHCurrentNS = cls; \
+    using HS = ReversibleHooks::HookInstallOptions::HS; \
     ReversibleHooks::ScopeName RHCurrentScopeName {#cls};
 
 // Use when `name` is a class
 #define RH_ScopedNamedClass(cls, name) \
     using RHCurrentNS = cls; \
+    using HS = ReversibleHooks::HookInstallOptions::HS; \
     ReversibleHooks::ScopeName RHCurrentScopeName {name};
 
 #define RH_ScopedVirtualClass(cls, addrGTAVtbl, nVirtFns_) \
     using RHCurrentNS = cls; \
+    using HS = ReversibleHooks::HookInstallOptions::HS; \
     ReversibleHooks::ScopeName RHCurrentScopeName {#cls}; \
     const auto pGTAVTbl = ReversibleHooks::Utility::VMTInfo{ (void**)addrGTAVtbl, nVirtFns_ }; \
     const auto pOurVTbl = ReversibleHooks::Utility::VMTInfo::FindByClassName(#cls, nVirtFns_); \
@@ -43,6 +47,7 @@
 // Use when `name` is a namespace
 #define RH_ScopedNamespace(name) \
     namespace RHCurrentNS = name; \
+    using HS = ReversibleHooks::HookInstallOptions::HS; \
     ReversibleHooks::ScopeName RHCurrentScopeName {#name};
 
 // Supports nested categories separeted by `/`. Eg.: `Entities/Ped`
@@ -119,13 +124,41 @@ namespace ReversibleHooks {
     };
 
     struct HookInstallOptions {
-        bool                  reversed{ true };                                 //!< Has this function been reversed?
-        bool                  enabled{ reversed };                              //!< Is this hook enabled (eg.: redirects GTA calls to ours or vice versa if disabled) by default?
-        bool                  locked{ !reversed };                              //!< If this hook shouldn't be switchable from the GUI
-        int                   jmpCodeSize{ 5 };                                 //!< Unused for now, but it's how much space we have in the gta function to write our hook code
-        std::optional<size_t> StackArgumentsToPreserve{};                       //!< Number of stack arguments to preserve
-        bool                  PreserveRegisters{ false };                       //!< If enabled registers will be saved accross the call, but it requires `StackArgumentsToPreserve` to be set as well
-        std::source_location  InstallSrcLoc{ std::source_location::current() }; //!< Where this hook was installed from (used for debugging)
+        using HS = ReversibleHook::TwoWayHookState;
+
+        //! Has this function been reversed?
+        bool Reversed{ true };
+
+        //! Unhooked by default?
+        //! Mostly just a shortcut for `State` to be set to `HS::Unhooked` by default
+        //! (Unless `Reversed` is false, in which case it will be set to `HS::RedirectToGTA`)
+        bool Unhooked{ false };
+
+        //! Initial state of the hook
+        HS State{ Reversed ? Unhooked ? HS::Unhooked : HS::RedirectToOurs : HS::RedirectToGTA };
+
+        //! If this hook shouldn't be switchable from the GUI
+        bool Locked{ !Reversed };
+
+        //! [Virtual Only]
+        //! 
+        //! Does hook overrides the virtual method of the base class?
+        //! 
+        //! Must be correctly specified because classes not overriding
+        //! will (in our code) inherit the address of the base class's method
+        //! causing the same function being hooked from different places
+        //! In GTA each class gets it's own function, regardless 
+        //! of whether it overrides the base class's method or not.
+        bool Overrides{ true };
+
+        //! Number of stack arguments to preserve
+        std::optional<size_t> StackArgumentsToPreserve{};
+
+        //! If enabled registers will be saved accross the call, but it requires `StackArgumentsToPreserve` to be set as well
+        bool PreserveRegisters{ false };
+
+        //! Where this hook was installed from (used for debugging)
+        std::source_location InstallSrcLoc{ std::source_location::current() };          
     };
 
     RootHookCategory& GetRootCategory();
@@ -142,7 +175,7 @@ namespace ReversibleHooks {
     * @param category Category's path, eg.: "Global/"
     * @param item     Item to add
     */
-    void AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHookBase> hook);
+    void AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook);
 
     namespace detail {
         void HookInstall(std::string_view category, std::string fnName, void* installAddress, void* addressToJumpTo, HookInstallOptions&& opt);
@@ -241,8 +274,7 @@ namespace ReversibleHooks {
         AddHookToCategory(category, category, std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
             vmtInfoOur,
             vmtInfoGTA,
-            (void*)(addressGTA),
-            opt.reversed
+            (void*)(addressGTA)
         ));
     }
 

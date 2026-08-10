@@ -26,16 +26,20 @@ VirtualHook::VirtualHook(
     void**           fnVMTEntryGTA,
     void*            fnAddressGTA
 ) :
-    TwoWayHookBase{ std::string{ name }, HookType::Virtual },
+    TwoWayHook{ std::string{ name } },
     m_VirtualDispatchHook{ std::string{ name }, fnVMTEntryOur, fnVMTEntryGTA },
-    m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA } {
-    Switch();
+    m_DirectCallHook{ std::string{ name }, fnAddressOur, fnAddressGTA }
+{
 }
 
-void VirtualHook::Switch() {
-    m_IsHooked = !m_IsHooked;
-    m_DirectCallHook.State(m_IsHooked);
-    m_VirtualDispatchHook.State(m_IsHooked);
+void VirtualHook::Check() {
+    m_DirectCallHook.Check();
+    m_VirtualDispatchHook.Check();
 }
-};
-};
+
+void VirtualHook::ApplyNewState(TwoWayHookState state, TwoWayHookState oldState) {
+    m_DirectCallHook.State(state);
+    m_VirtualDispatchHook.State(state);
+}
+}; // namespace ReversibleHook
+}; // namespace ReversibleHooks
