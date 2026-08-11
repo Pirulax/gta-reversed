@@ -43,16 +43,20 @@ inline void DisplayConsole() {
 }
 
 /*!
- * @brief Get function information (module, function name, line number) at the given address.
- * @return 
+ * @return function information (module, function name, line number) at the given address.
  */
-std::string GetFunctionInfoAtAddress(uintptr_t address, HANDLE hProcess = INVALID_HANDLE_VALUE);
+std::string GetFunctionInfoAtAddress(uintptr_t address, bool compact = false, HANDLE hProcess = GetCurrentProcess());
 
 /*!
  * @brief Initialize debugging symbols
  * @note Call after the CommandLine has initialized, as it uses the exe path to initialize symbols.
  */
-void InitializeSymbols();
+void LoadSymbols();
+
+/*!
+ * @brief Unload symbols
+ */
+void UnloadSymbols();
 
 };
 };

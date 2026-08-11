@@ -29,6 +29,12 @@ private:
     SIZE_T m_Size{};
 };
 
+template<typename T>
+constexpr void* FunctionToVoidPtr(T fn) {
+    static_assert(sizeof(fn) == sizeof(void*), "Function pointer must fit into a `void*`");
+    return std::bit_cast<void*>(fn);
+}
+
 /*!
  * @brief Copies memory from `src` to `dst`, temporarily changing the protection of the destination memory to allow writing.
  * @param dst The destination address to copy to.

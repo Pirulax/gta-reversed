@@ -13,15 +13,22 @@
 
 #include "VideoPlayer.h"
 #include "VideoMode.h"
-#include "WinInput.h"
 #include "WinPlatform.h"
-#include "WndProc.h"
-#include "WindowedMode.hpp"
 
-#include <InjectHooksMain.h>
 #include "extensions/Configs/FastLoader.hpp"
+
+#ifndef NOTSA_USE_SDL3
+#include "WinInput.h"
+#include "WndProc.h"
+#endif
+
+#ifdef NOTSA_STANDALONE
+#include <InjectHooksMain.h>
 #include <extensions/CommandLine.h>
 #include <extensions/debug.hpp>
+#endif
+
+#include <toolsmenu/UIRenderer.h>
 
 constexpr auto NO_FOREGROUND_PAUSE = true;
 
@@ -449,6 +456,7 @@ INT WINAPI NOTSA_WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdL
     SystemParametersInfo(SPI_SETSTICKYKEYS, sizeof(STICKYKEYS), &pvParam1, 2u);
 
     UpdateWindow(PSGLOBAL(window));
+
 #ifdef NOTSA_USE_SDL3
     SDL_SetWindowFocusable(sdlWnd, true);
     SDL_SetWindowPosition(sdlWnd, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
@@ -469,8 +477,12 @@ INT WINAPI NOTSA_WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdL
 
     SetErrorMode(SEM_FAILCRITICALERRORS);
 
+    notsa::ui::UIRenderer::CreateInstance();
+
     // 0x7489FB
     MainLoop(nCmdShow);
+
+    notsa::ui::UIRenderer::DestroyInstance();
 
     // if game is loaded, shut it down
     if (gGameState == GAME_STATE_IDLE) {
@@ -502,18 +514,29 @@ INT WINAPI WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, I
     if (CommandLine::s_WaitForDebugger) {
         notsa::debug::WaitForDebugger();
     }
+
     notsa::debug::DisplayConsole();
-    notsa::debug::InitializeSymbols();
+    notsa::debug::LoadSymbols();
     notsa::Logging::CreateInstance();
+
 #ifdef NOTSA_DUMP_HOOKS_ONLY
+    ReversibleHooks::RHManager::CreateInstance();
     NOTSA_LOG_INFO("Dumping hooks only, no memory writing will be performed");
     if (CommandLine::s_DumpHooksPath.empty()) {
         NOTSA_LOG_ERR("No path provided for dumping hooks, use `--dump-hooks-to` CLI argument");
         return 1;
     }
-    InjectHooksMain(GetModuleHandle(nullptr)); // this will call injecthooks which then ends up dumping the data
+    InjectHooksMain(GetModuleHandle(nullptr));
+
+    ReversibleHooks::RHManager::DestroyInstance();
+    notsa::Logging::DestroyInstance();
+    notsa::debug::UnloadSymbols();
+
     return 0;
 #else
+    notsa::ui::UIRenderer::CreateInstance();
+    // code..
+    notsa::ui::UIRenderer::CreateInstance();
     NOTSA_LOG_ERROR("This executable is meant to be used for dumping hooks only, see `NOTSA_DUMP_HOOKS_ONLY` option");
     return 1;
 #endif

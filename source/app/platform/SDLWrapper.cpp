@@ -51,7 +51,7 @@ void ProcessEvents() {
             continue;
         }
         case SDL_EVENT_MOUSE_MOTION: {
-            if (notsa::ui::UIRenderer::GetSingleton().IsActive()) {
+            if (notsa::ui::UIRenderer::GetInstance().IsActive()) {
                 break;
             }
             static CVector2D s_MousePos{};

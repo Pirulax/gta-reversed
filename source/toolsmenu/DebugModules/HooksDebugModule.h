@@ -18,14 +18,11 @@ class HooksDebugModule final : public DebugModule {
 private:
     class HookFilter {
         static constexpr std::string_view NAMESPACE_SEP{ "/" };
-        static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
+        static constexpr std::string_view INVALID_NAMESPACE_FILTER_CHARS{ "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the namespace filter
 
-        enum HookFilterMode {
-            NONE,
-            BY_NAME,
-            BY_ADDRESS,
-            BY_NAME_AND_ADDRESS
-        };
+        static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
+        static constexpr std::string_view DIGITS{ "0123456789" };
+        static constexpr std::string_view INVALID_HOOK_FILTER_CHARS{ "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the hook filter
 
     public:
         void Render();
@@ -40,10 +37,15 @@ private:
         bool IsHookFilterPresent();
         bool IsHookFilterActive();
         bool EitherFiltersActive();
-        bool IsRelativeToRootNamespace();
-        void MakeAllVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open);
-        auto DoFilter_Internal(ReversibleHooks::HookCategory& cat, size_t depth = 0) -> std::pair<bool, bool>;
-        void DoFilter(ReversibleHooks::HookCategory& cat);
+        bool IsRootRelativeNamespace();
+        void SetSubCategoriesVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open);
+        void SetSubCategoriesItemsVisible(ReversibleHooks::HookCategory& cat, bool visible);
+
+        struct FilterResult {
+            bool Visible{};
+            bool Open{};
+        };
+        auto DoFilter(ReversibleHooks::HookCategory& cat, size_t depth = 0) -> FilterResult;
         void OnInputUpdate();
 
     private:
@@ -62,12 +64,15 @@ private:
         //! - `///` - 4 empty strings
         std::vector<std::string_view> m_NamespaceTokens{};
 
+        //! If the 2 filter's results should be combined
+        bool m_CombineFilterResults{};
+
         //! Filter of hook name or/and address (in hex form)
         //! If `nullopt` means there was no `::` (HOOK_FILTER_SEP) in the user input
         //! otherwise if there was, it contains whatever was after it (Which might be nothing - So the string is empty)
         std::optional<std::string_view> m_HookFilter{};
 
-        //! If `m_HookFilter` is address-like (hex format required) and should be used to filter by address (as well)
+        //! If `m_HookFilter` is address-like (can be converted to a number from hex, with or without 0x prefix) and should be used to filter by address (as well)
         bool m_HookFilterByAddress{};
 
         //! If `m_HookFilter` should be used to filter by name (as well)

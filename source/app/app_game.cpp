@@ -122,7 +122,7 @@ void RenderEffects() {
     CRenderer::RenderFirstPersonVehicle();
     CPostEffects::Render();
 
-    notsa::ui::UIRenderer::GetSingleton().Render3D();
+    notsa::ui::UIRenderer::GetInstance().Render3D();
 }
 
 // 0x53DF40
@@ -327,7 +327,7 @@ void Idle(void* param) {
 
         // SDL already constraints the mouse pointer using relative mode
 #ifndef NOTSA_USE_SDL3
-        if (!notsa::ui::UIRenderer::GetSingleton().IsActive()) {
+        if (!notsa::ui::UIRenderer::GetInstance().IsActive()) {
             FrontEndMenuManager.CentreMousePointer();
         }
 #endif
@@ -382,7 +382,7 @@ void Idle(void* param) {
     FlushObrsPrintfs();
 
     // NOTSA: ImGui menu draw loop
-    notsa::ui::UIRenderer::GetSingleton().DrawLoop();
+    notsa::ui::UIRenderer::GetInstance().DrawLoop();
 
     RwCameraEndUpdate(Scene.m_pRwCamera);
     RsCameraShowRaster(Scene.m_pRwCamera);
@@ -439,7 +439,7 @@ void FrontendIdle() {
         FlushObrsPrintfs();
 
         // NOTSA: ImGui menu draw loop
-        notsa::ui::UIRenderer::GetSingleton().DrawLoop();
+        notsa::ui::UIRenderer::GetInstance().DrawLoop();
 
         RwCameraEndUpdate(Scene.m_pRwCamera);
         RsCameraShowRaster(Scene.m_pRwCamera);

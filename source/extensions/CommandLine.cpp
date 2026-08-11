@@ -80,4 +80,57 @@ fs::path GetExePath() {
     return s_ExePath;
 }
 
-} // namespace CommandLine
+void ApplyHookSettings() {
+    using namespace ReversibleHooks;
+
+    auto* const rh        = &RHManager::GetInstance();
+
+    const auto ResultText = [](RHManager::SetCatOrItemStateResult res) {
+        switch (res) {
+        case RHManager::SetCatOrItemStateResult::NotFound: return "not found";
+        case RHManager::SetCatOrItemStateResult::Locked:   return "locked";
+        case RHManager::SetCatOrItemStateResult::Done:     return "done";
+        default:                                NOTSA_UNREACHABLE();
+        }
+    };
+
+    if (CommandLine::s_UnhookAll || !CommandLine::s_UnhookExcept.empty()) {
+        rh->GetRootCategory().SetAllItemsState(ReversibleHooks::ReversibleHook::TwoWayHookState::RedirectToGTA);
+
+        NOTSA_LOG_DEBUG("Unhooked all via command-line");
+        for (const auto& item : CommandLine::s_UnhookExcept) {
+            const auto res = rh->SetCategoryOrItemStateByPath(item, true);
+
+            if (res == RHManager::SetCatOrItemStateResult::Done) {
+                NOTSA_LOG_DEBUG("Rehooked '{}' via command-line.", item);
+            } else {
+                NOTSA_LOG_WARN("Couldn't rehook '{}' via command-line: {}", item, ResultText(res));
+            }
+        }
+        return;
+    }
+
+    if (!CommandLine::s_UnhookSome.empty()) {
+        for (const auto& item : CommandLine::s_UnhookSome) {
+            const auto res = rh->SetCategoryOrItemStateByPath(item, false);
+
+            if (res == RHManager::SetCatOrItemStateResult::Done) {
+                NOTSA_LOG_DEBUG("Unhooked '{}' via command-line.", item);
+            } else {
+                NOTSA_LOG_WARN("Couldn't unhook '{}' via command-line: {}", item, ResultText(res));
+            }
+        }
+    }
+}
+
+void DumpHooks() {
+    if (const auto& path = CommandLine::s_DumpHooksPath; !path.empty()) {
+        ReversibleHooks::RHManager::GetInstance().WriteHooksToFile(path);
+    }
+}
+
+void PostHooksInjected() {
+    ApplyHookSettings();
+    DumpHooks();
+}
+}; // namespace CommandLine

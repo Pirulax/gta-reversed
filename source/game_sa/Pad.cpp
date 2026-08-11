@@ -215,7 +215,7 @@ void CPad::Update(int32 pad) {
 void CPad::UpdatePads() {
     ZoneScoped;
 
-    const auto& isDebugUIActive = notsa::ui::UIRenderer::GetSingleton().IsActive();
+    const auto& isDebugUIActive = notsa::ui::UIRenderer::GetInstance().IsActive();
 
     if (!isDebugUIActive) {
         GetPad(0)->UpdateMouse();

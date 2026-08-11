@@ -50,9 +50,6 @@ public:
     auto OverallState()         const { return m_CommonAllItemsState; }
     bool HasAnyUnhooked() const noexcept { return m_AnyOurItemsUnhooked || m_AnySubItemsUnhooked; }
 
-    bool Disabled()             const { return m_allCatsDisabled && m_AllItemsLocked; }
-    bool ItemsDisabled()        const { return m_AllItemsLocked; }
-
     auto ItemsState()           const { return m_CommonOurItemsState; }
                                 
     auto SubcategoriesState()   const { return m_CommonSubItemsState; }
@@ -75,9 +72,30 @@ public:
 
     bool IsEmpty() const noexcept { return m_items.empty() && m_subCategories.empty(); }
 
+    /*!
+     * @return If all items (including those of sub-categories) are locked
+     */
+    bool IsLocked() const noexcept {
+        if (!AreItemsLocked()) {
+            return false;
+        }
+        return rng::all_of(m_subCategories, [](const auto& cat) {
+            return cat.IsLocked();
+        });
+    }
+
+    /*!
+     * @return If all of our items are locked
+     */
+    bool AreItemsLocked() const {
+        return m_AllItemsLocked;
+    }
+
     //! Add one item to this category (Deal with possible state change)
     void AddItem(HookCategoryItem item) {
         assert(!FindItem(item.GetName()) && "Category already contains an item with such name");
+
+        m_AllItemsLocked = (m_AllItemsLocked || m_items.empty()) && item.GetIsStateLocked();
 
         // Lexographically sorted insert 
         const auto& emplacedItem = *m_items.emplace(
@@ -287,7 +305,7 @@ private:
 
         // Now update ourselves
         m_allCatsDisabled = rng::all_of(m_subCategories, [](HookCategory& cat) {
-            return cat.Disabled();
+            return cat.IsLocked();
         });
         m_AllItemsLocked  = rng::all_of(m_items, [](const HookCategoryItem& item) {
             return item.GetIsStateLocked();

@@ -28,47 +28,6 @@ void LoadConfigurations() {
     // ...
 }
 
-static void ApplyCommandLineHookSettings() {
-    using namespace ReversibleHooks;
-
-    const auto ResultText = [](SetCatOrItemStateResult res) {
-        switch (res) {
-        case SetCatOrItemStateResult::NotFound: return "not found";
-        case SetCatOrItemStateResult::Locked:   return "locked";
-        case SetCatOrItemStateResult::Done:     return "done";
-        default:                                NOTSA_UNREACHABLE();
-        }
-    };
-
-    if (CommandLine::s_UnhookAll || !CommandLine::s_UnhookExcept.empty()) {
-        GetRootCategory().SetAllItemsState(ReversibleHooks::ReversibleHook::TwoWayHookState::RedirectToGTA);
-
-        NOTSA_LOG_DEBUG("Unhooked all via command-line");
-        for (const auto& item : CommandLine::s_UnhookExcept) {
-            const auto res = SetCategoryOrItemStateByPath(item, true);
-
-            if (res == SetCatOrItemStateResult::Done) {
-                NOTSA_LOG_DEBUG("Rehooked '{}' via command-line.", item);
-            } else {
-                NOTSA_LOG_WARN("Couldn't rehook '{}' via command-line: {}", item, ResultText(res));
-            }
-        }
-        return;
-    }
-
-    if (!CommandLine::s_UnhookSome.empty()) {
-        for (const auto& item : CommandLine::s_UnhookSome) {
-            const auto res = SetCategoryOrItemStateByPath(item, false);
-
-            if (res == SetCatOrItemStateResult::Done) {
-                NOTSA_LOG_DEBUG("Unhooked '{}' via command-line.", item);
-            } else {
-                NOTSA_LOG_WARN("Couldn't unhook '{}' via command-line: {}", item, ResultText(res));
-            }
-        }
-    }
-}
-
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
     switch (ul_reason_for_call) {
         case DLL_PROCESS_ATTACH: {
@@ -82,26 +41,38 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
 
         std::setlocale(LC_ALL, "en_US.UTF-8");
 
+        notsa::debug::DisplayConsole();
+        notsa::debug::LoadSymbols(); // Used by logging
+        notsa::Logging::CreateInstance();
+
         CommandLine::Load(__argc, __argv);
         if (CommandLine::s_WaitForDebugger) {
             notsa::debug::WaitForDebugger();
         }
-
-        notsa::debug::DisplayConsole();
-        notsa::debug::InitializeSymbols();
-        notsa::Logging::CreateInstance();
-
         LoadConfigurations();
 
+        ReversibleHooks::RHManager::CreateInstance();
         InjectHooksMain(hModule);
-        ApplyCommandLineHookSettings();
+
+        break;
+    }
+    case DLL_PROCESS_DETACH: {
+        if (lpReserved == nullptr) {
+            NOTSA_LOG_INFO("DLL_PROCESS_DETACH: Shutting down normally...");
+
+            ReversibleHooks::RHManager::DestroyInstance();
+            notsa::Logging::DestroyInstance();
+            notsa::debug::UnloadSymbols();
+        } else { // This is pretty much the only thing that's ever reached
+            NOTSA_LOG_INFO("DLL_PROCESS_DETACH: Process is terminating, shutting down only what's necessary");
+
+            notsa::Logging::DestroyInstance();
+        }
         break;
     }
     case DLL_THREAD_ATTACH:
         break;
     case DLL_THREAD_DETACH:
-        break;
-    case DLL_PROCESS_DETACH:
         break;
     }
     return TRUE;

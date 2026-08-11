@@ -29,8 +29,11 @@ constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
 // Clears both filters
 // Making all items visible again is done by `DoFilter`
 void HooksDebugModule::HookFilter::ClearFilters() {
-    m_NamespaceTokens.clear(); // Clear only, so allocated memory is kept
-    m_HookFilter = {};
+    m_NamespaceTokens.clear();
+    m_HookFilter           = {};
+    m_HookFilterByAddress  = false;
+    m_HookFilterByName     = false;
+    m_CombineFilterResults = false;
 }
 
 // Are we filtering namespaces
@@ -63,27 +66,30 @@ bool HooksDebugModule::HookFilter::EitherFiltersActive() {
 // Should the current filtered namespace be relative to the root namespace.
 // This is the case when the user prepends the namespace tokens with a `/` (NAMESPACE_SEP).
 // Eg.: `/Entity` should only show the `Entity` namespace under `Root` (But not, for example, `Audio/AEVehicleAudioEntity`)
-bool HooksDebugModule::HookFilter::IsRelativeToRootNamespace() {
+bool HooksDebugModule::HookFilter::IsRootRelativeNamespace() {
     return m_NamespaceTokens.size() >= 1 && m_NamespaceTokens.front().empty();
 }
 
-// Make all categories and their items possibly visible and/or open
-void HooksDebugModule::HookFilter::MakeAllVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open) {
-    cat.Visible(true);
+void HooksDebugModule::HookFilter::SetSubCategoriesVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open) {
+    cat.Visible(visible);
     cat.Open(open);
-
-    cat.m_anyItemsVisible = true;
-    for (auto& i : cat.Items()) {
-        i.SetMatchesSearchFilter(true);
-    }
-
     for (auto& sc : cat.SubCategories()) {
-        MakeAllVisibleAndOpen(sc, visible, open);
+        SetSubCategoriesVisibleAndOpen(sc, visible, open);
+    }
+}
+
+void HooksDebugModule::HookFilter::SetSubCategoriesItemsVisible(ReversibleHooks::HookCategory& cat, bool visible) {
+    cat.m_anyItemsVisible = visible;
+    for (auto& i : cat.Items()) {
+        i.SetMatchesSearchFilter(visible);
+    }
+    for (auto& sc : cat.SubCategories()) {
+        SetSubCategoriesItemsVisible(sc, visible);
     }
 }
 
 // Returns `pair<visible, open>` of this category
-auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCategory& cat, size_t depth) -> std::pair<bool, bool> {
+auto HooksDebugModule::HookFilter::DoFilter(ReversibleHooks::HookCategory& cat, size_t depth) -> FilterResult {
     // Will be set to the appropriate values on return
     cat.Visible(false);
     cat.Open(false);
@@ -94,18 +100,18 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
     const auto ProcessSubCategories = [&] {
         bool anyVisible{}, anyOpen{};
         for (auto& sc : cat.SubCategories()) {
-            const auto [visible, open] = DoFilter_Internal(sc, depth + 1);
-            anyVisible |= visible;
-            anyOpen |= open;
+            const auto [visible, open] = DoFilter(sc, depth + 1);;
+            anyVisible |= (sc.m_isVisible = visible);
+            anyOpen |= (sc.m_isOpen = open);
         }
-        return std::make_pair(anyVisible, anyOpen);
+        return FilterResult{ anyVisible, anyOpen };
     };
 
     // If `doFilter` argument is `false` all items are set visible,
     // and either true (if we have hooks) or false (if `cat.Items().empty()`) is returned.
     // Otherwise items are filtered and true if returned if at least 1 item is visible.
-    const auto ProcessItems = [&](bool allowFilter) {
-        if (allowFilter && IsHookFilterActive()) {
+    const auto ProcessItems = [&] (bool noFilter = false) {
+        if (!noFilter && IsHookFilterActive()) {
             cat.m_anyItemsVisible = false;
             for (auto& i : cat.Items()) {
                 auto matches = false;
@@ -113,9 +119,9 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
                     matches |= StringContainsString(i.GetName(), *m_HookFilter, m_IsCaseSensitive);
                 }
                 if (m_HookFilterByAddress) {
-                    const auto CheckContainsAddress = [&](void* addr) {
-                        char buf[64];
-                        const auto [end, ec] = std::to_chars(buf, buf + sizeof(buf), (uintptr_t)(addr), 16);
+                    const auto CheckContainsAddress = [&] (void* addr) {
+                        char buf[64]{ "0x" };
+                        const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(addr), 16);
                         if (ec != std::errc{}) {
                             return false;
                         }
@@ -129,7 +135,8 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
         } else { // Otherwise make sure all items are visible (if any)
             if (cat.Items().empty()) { // No items, make sure flag is set correctly.
                 cat.m_anyItemsVisible = false;
-            } else {
+            }
+            else {
                 cat.m_anyItemsVisible = true;
                 for (auto& i : cat.Items()) {
                     i.SetMatchesSearchFilter(true);
@@ -139,144 +146,215 @@ auto HooksDebugModule::HookFilter::DoFilter_Internal(ReversibleHooks::HookCatego
         return cat.m_anyItemsVisible;
     };
 
-    if (IsNamespaceFilterActive()) {
-        if (IsRelativeToRootNamespace()) { // Eg.: (Notice the trailing `/`) /Entity/Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
-            // Using root namespace.
-            // In this case all tokens must match up to root
 
-            const auto ProcessFilter = [&]() -> bool {
-                if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
-                    assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
-                    return true;
-                } else if (depth < m_NamespaceTokens.size()) {
-                    if (   hasSubCategories                      // Unless we're last category to match we must have more sub-categories so all tokens can match
-                        || depth == m_NamespaceTokens.size() - 1 // Last token to match, so there will be no more, thus it's fine if there are no more subcategories.
-                        || m_NamespaceTokens.back().empty()      // Or last token is empty (Empty strings always match everything) - This way a trailing `/` opens the category (like `::` does)
-                        ) {
-                        return StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive);
-                    } else {
-                        return false; // Not enough children to statify all tokens
-                    }
-                } else { // Our parents fully matched the tokens, they just want to make us visible, but not open
-                    return true;
-                }
-            };
 
-            const auto byFilterVisible = ProcessFilter();
-            if (!byFilterVisible) {
-                return {};
-            }
 
-            // If botom level, and hook filtering is present: make us open, and dont show any more sub-categories
-            if (depth == m_NamespaceTokens.size() - 1 /*bottom level*/ && IsHookFilterPresent()) {
-                MakeAllVisibleAndOpen(cat, false, false);
+    if (!m_CombineFilterResults && !IsNamespaceFilterActive()) { // Hook filter only
+        assert(IsHookFilterActive());
 
-                (void)ProcessItems(true);
-
-                cat.Visible(true);
-                cat.Open(true);
-
-                return { true, true };
-            }
-
-            const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-
-            const bool open    = anySCOpen || depth + 1 < m_NamespaceTokens.size() /*All categories before the bottom level should be open*/;
-            const bool visible = anySCVisible || byFilterVisible;
-
-            cat.Visible(visible);
-            cat.Open(open);
-
-            return { visible, open };
-        } else { // Eg.: Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
-            // Not in the root namespace
-            // All tokens should match in reverse order starting at us, eg.:
-            // Entity::Ped::Ped
-            // So, in order to be visible* `cat`s name should contain `Ped`
-            // it's parent's name should contain `Ped` and it's parent's name should contain `Entity`
-            // *We may be visible if there are subcategories visible even if this function returns false
-
-            // Example:
-            // Parents: Root-Entity-Ped-CPed
-            // Depth:   0     1       2    3   <= Also number of tokens
-            // Tokens:        Entity::Ped::Ped
-
-            const auto ProcessFilter = [&]() -> bool {
-                if (depth < m_NamespaceTokens.size()) { // Optimization: Not enough categories to possibly staisfy all tokens
-                    return false;
-                }
-
-                for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
-                    if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
-                        return false;
-                    }
-                    icat = icat->Parent();
-                }
-
-                return true;
-            };
-
-            const auto byFilterVisible           = ProcessFilter();
-            const auto itemsVisible              = ProcessItems(true); // Filter items
-            const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-
-            const bool open    = anySCOpen || anySCVisible || (hasSubCategories && byFilterVisible) || (IsHookFilterPresent() && itemsVisible);
-            const bool visible = (byFilterVisible && itemsVisible) || anySCVisible;
-
-            cat.Visible(visible);
-            cat.Open(open);
-
-            return { visible, open };
-        }
-    } else {
-        // Filter by hook names
+        // Filter by hook names only
         // Category is visible if it:
         // - It has visible hooks (After filtering)
         // - Or it has visible sub-categories
 
-        const auto itemsVisible = ProcessItems(true); // Filter items
+        const auto itemsVisible = ProcessItems(); // Filter items
         const auto [anySubCatVisible, anySubCatOpen] = ProcessSubCategories();
+        const auto open = itemsVisible || anySubCatOpen;
+        return FilterResult{
+            .Visible = open || anySubCatVisible,
+            .Open    = open,
+        };
+#if 1
+    } 
+    const auto isPartOfNamespacePath  = depth <= m_NamespaceTokens.size() - 1;
+    const auto isAtEndOfNamespacePath = depth == m_NamespaceTokens.size() - 1;
+    const auto isLastKeepOpen         = isAtEndOfNamespacePath && m_NamespaceTokens.back().empty(); // Last token is empty, so we should keep the category open
 
-        const auto open    = itemsVisible || anySubCatOpen;
-        const bool visible = open || anySubCatVisible;
+    const auto ProcessResult = [&](
+        bool isMatchNamespace,
+        bool isAnySCVisible,
+        bool isAnySCOpen
+    ) {
+        const auto isAnyItemVisible = ProcessItems(m_CombineFilterResults);
+        return FilterResult{
+            .Visible = isAnySCVisible || isMatchNamespace && isAnyItemVisible,
+            .Open    = isAnySCOpen || isAnySCVisible || isLastKeepOpen || (isMatchNamespace && !isAnyItemVisible) || (IsHookFilterPresent() && isAnyItemVisible),                           
+        };
+    };
 
-        cat.Visible(visible);
-        cat.Open(open);
-
-        return { visible, open };
-    }
-}
-
-void HooksDebugModule::HookFilter::DoFilter(RH::HookCategory& cat) {
-    if (EitherFiltersActive()) {
-        DoFilter_Internal(cat);
+    if (IsRootRelativeNamespace()) {
+        if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
+            assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
+        } else if (isPartOfNamespacePath && !isLastKeepOpen) {
+            if (!hasSubCategories && !isAtEndOfNamespacePath || !StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive)) {
+                return {}; // If not at the end we must have more sub-categories, otherwise path wont match
+            }
+        }
+        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
+        return ProcessResult(
+            true,
+            anySCVisible,
+            anySCOpen
+        );
     } else {
-        MakeAllVisibleAndOpen(cat, true, false); // Make all visible, but closed
+        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
+                const auto ProcessFilter = [&]() -> bool {
+            if (depth < m_NamespaceTokens.size()) { // Optimization: Not enough categories to possibly staisfy all tokens
+                return false;
+            }
+            for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
+                if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
+                    return false;
+                }
+                icat = icat->Parent();
+            }
+            return true;
+        };
+        return ProcessResult(
+            anySCVisible && anySCOpen || ProcessFilter(),
+            anySCVisible,
+            anySCOpen
+        );
     }
+#else
+    } else if (IsRootRelativeNamespace()) { // Eg.: (Notice the trailing `/`) /Entity/Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
+        // Using root namespace.
+        // In this case all tokens must match back to depth 1 (0 is root, we don't check it for match)
+        // Depth:    0       1      2   3
+        // Tokens:   <empty> Entity Ped Player
+        // No. Tok.  1       2      3   4
+
+        const auto isPartOfNamespacePath  = depth <= m_NamespaceTokens.size() - 1;
+        const auto isAtEndOfNamespacePath = depth == m_NamespaceTokens.size() - 1;
+        const auto isLastKeepOpen         = isAtEndOfNamespacePath && m_NamespaceTokens.back().empty(); // Last token is empty, so we should keep the category open
+
+        if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
+            assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
+        } else if (isPartOfNamespacePath && !isLastKeepOpen) {
+            if (!hasSubCategories && !isAtEndOfNamespacePath || !StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive)) {
+                return {}; // If not at the end we must have more sub-categories, otherwise path wont match
+            }
+        }
+
+        //const auto ProcessFilter = [&]() -> bool {
+        //    if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
+        //        assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
+        //        return true;
+        //    } else if (depth < m_NamespaceTokens.size()) {   // Not the last category to match the path?
+        //        if (   hasSubCategories                      // To match the path fully we have to have sub-categories
+        //            || depth == m_NamespaceTokens.size() - 1 // ...or it's the last token to match, in which case it's enough if this category matches
+        //            || m_NamespaceTokens.back().empty()      // ...or last token is empty (Empty strings always match everything) - This way a trailing `/` opens the category (like `::` does)
+        //        ) {
+        //            return StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive);
+        //        } else {
+        //            return false; // Not enough children to statify all tokens
+        //        }
+        //    } else { // Our parents fully matched the tokens, so we can be visible now
+        //        return true;
+        //    }
+        //};
+
+        // Open category at last depth, 
+        if (isAtEndOfNamespacePath && !IsHookFilterActive()) {
+            SetSubCategoriesVisibleAndOpen(cat, true, false);
+            SetSubCategoriesItemsVisible(cat, true);
+            (void)ProcessItems(m_CombineFilterResults);
+            return { true, isLastKeepOpen };
+        }
+
+        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
+        const auto anyItemsVisible              = ProcessItems(m_CombineFilterResults); // We must run this regardless of having a filter or not
+        const auto partOfNamespacePath       = depth <= m_NamespaceTokens.size() - 1;
+        return {
+            anySCVisible || IsHookFilterActive() && anyItemsVisible,       // visible
+            anySCOpen || partOfNamespacePath // open: All categories before the bottom level should be open
+        };
+    } else { // Eg.: Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
+        // Not in the root namespace
+        // All tokens should match in reverse order starting at us, eg.:
+        // Entity::Ped::Ped
+        // So, in order to be visible* `cat`s name should contain `Ped`
+        // it's parent's name should contain `Ped` and it's parent's name should contain `Entity`
+        // *We may be visible if there are subcategories visible even if this function returns false
+
+        // Example:
+        // Parents: Root-Entity-Ped-CPed
+        // Depth:   0     1       2    3   <= Also number of tokens
+        // Tokens:        Entity::Ped::Ped
+
+        const auto itemsVisible              = ProcessItems();
+
+        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
+        if (anySCVisible && anySCOpen) {
+            return {
+                anySCVisible,
+                anySCOpen
+            };
+        }
+
+        const auto ProcessFilter = [&]() -> bool {
+            if (depth < m_NamespaceTokens.size()) { // Optimization: Not enough categories to possibly staisfy all tokens
+                return false;
+            }
+
+            for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
+                if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
+                    return false;
+                }
+                icat = icat->Parent();
+            }
+
+            return true;
+        };
+
+        const auto catMatchesFilter = ProcessFilter();
+        return {
+            anySCVisible || (m_CombineFilterResults ? catMatchesFilter || IsHookFilterPresent() && itemsVisible : catMatchesFilter && itemsVisible), // visible
+            anySCOpen || anySCVisible || (catMatchesFilter && !itemsVisible) || (IsHookFilterPresent() && itemsVisible), // open
+        };
+    }
+#endif
 }
 
 void HooksDebugModule::HookFilter::OnInputUpdate() {
-    const std::string_view inputsv{ m_Input };
+    const std::string_view inputsv{ notsa::trim_string(m_Input) };
 
     ClearFilters();
 
-    if (!inputsv.empty()) { 
-        // Extract namespace tokens and the hook name filter
-        {
-            const auto sepPos = inputsv.rfind(HOOK_FILTER_SEP);
+    if (!inputsv.empty()) {
+        // If the first character is a digit, we assume the user wants to filter by address
+        // as namespace or function names can't start with a digit
+        if (DIGITS.contains(inputsv.front())) {
+            m_HookFilter          = inputsv;
+            m_HookFilterByAddress = true;
+        } else {
+            const auto namespaceSepPos = inputsv.rfind(HOOK_FILTER_SEP);
+            const auto hasNamespaceSep = namespaceSepPos != std::string_view::npos;
 
-            // First half contains the namespace filter tokens
-            for (auto t : SplitStringView(inputsv.substr(0, sepPos), NAMESPACE_SEP)) {
-                m_NamespaceTokens.emplace_back(t);
+            // First half (if any), or the whole input is the namespace filter
+            const auto namespaceStr = hasNamespaceSep
+                ? inputsv.substr(0, namespaceSepPos)
+                : inputsv;
+            if (!namespaceStr.contains(INVALID_NAMESPACE_FILTER_CHARS)) {
+                for (auto t : SplitStringView(namespaceStr, NAMESPACE_SEP)) {
+                    m_NamespaceTokens.emplace_back(notsa::trim_string(t));
+                }
             }
 
-            // Second half (if any) contains the hook/function name filter
-            if (sepPos != std::string_view::npos) {
-                const auto filter     = notsa::trim_string(inputsv.substr(sepPos + HOOK_FILTER_SEP.size()));
-                m_HookFilter          = filter;
-                m_HookFilterByName    = !filter.starts_with("0x");
-                m_HookFilterByAddress = !m_HookFilterByAddress || notsa::try_ston<uintptr>(filter, 16).has_value();
+            // Second half (if any) or the whole input is the hook filter
+            const auto hookFilterStr = hasNamespaceSep
+                ? notsa::trim_string(inputsv.substr(namespaceSepPos + HOOK_FILTER_SEP.size()))
+                : inputsv;
+            if (hookFilterStr.find_first_of(INVALID_HOOK_FILTER_CHARS) == std::string_view::npos) {
+                m_HookFilter = hookFilterStr;
+                if (!hookFilterStr.empty()) {
+                    m_HookFilterByName    = !DIGITS.contains(hookFilterStr.front()); // Names can't start with a digit, if they do so, it might be a hex address
+                    m_HookFilterByAddress = !m_HookFilterByName || notsa::try_ston<uintptr>(hookFilterStr, 16).has_value();
+                }
             }
+
+            // If there's no explicit separator we combine the results of both filters
+            m_CombineFilterResults = !hasNamespaceSep;
         }
 
         // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
@@ -295,12 +373,20 @@ void HooksDebugModule::HookFilter::OnInputUpdate() {
 
         // If we're using the root namespace only but there's no hook filter we practically don't filter anything
         // Example user inputs: `/`, `/::`, `::`
-        if (IsRelativeToRootNamespace() && m_NamespaceTokens.size() == 1 && IsHookFilterActive()) {
+        if (IsRootRelativeNamespace() && m_NamespaceTokens.size() == 1 && IsHookFilterActive()) {
             ClearFilters();
         }
     }
 
-    DoFilter(RH::GetRootCategory()); 
+    auto& root = RH::RHManager::GetInstance().GetRootCategory();
+    if (EitherFiltersActive()) {
+        const auto [visible, open] = DoFilter(root);
+        root.m_isVisible           = visible;
+        root.m_isOpen              = open;
+    } else {
+        SetSubCategoriesItemsVisible(root, true);          // Restore visibility of all items
+        SetSubCategoriesVisibleAndOpen(root, true, false); // Make all visible, but closed
+    }
 }
 
 void HooksDebugModule::HookFilter::Render() {
@@ -574,7 +660,7 @@ void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
 
         const auto [open, stateChanged] = TreeNodeWithCheckbox(
             cat.Name().c_str(),
-            cat.Disabled(),
+            cat.IsLocked(),
             cat.HasAnyUnhooked(),
             cat.OverallState(),
             cat.OverallState().value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
@@ -607,7 +693,7 @@ void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
         } else { // Otherwise use a tree node + checkbox for them
             const auto [open, stateChanged] = TreeNodeWithCheckbox(
                 "Hooks",
-                cat.ItemsDisabled(),
+                cat.AreItemsLocked(),
                 cat.m_AnyOurItemsUnhooked,
                 cat.ItemsState(),
                 cat.ItemsState().value_or(cat.m_LastSetOurState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
@@ -647,7 +733,7 @@ void HooksDebugModule::RenderWindow() {
         if (ImGui::BeginMenu("Tools")) {
             if (ImGui::MenuItem("Export hooks.csv")) {
                 const auto path = fs::weakly_canonical("hooks.csv");
-                ReversibleHooks::WriteHooksToFile(path);
+                ReversibleHooks::RHManager::GetInstance().WriteHooksToFile(path);
                 NOTSA_LOG_INFO("Exported hooks to {:?}", path.string());
             }
             ImGui::EndMenu();
@@ -662,7 +748,7 @@ void HooksDebugModule::RenderWindow() {
                 : SlideSetterMode::SETTER
             : SlideSetterMode::NONE;
     m_HookFilter.Render();
-    RenderCategory(RH::GetRootCategory());
+    RenderCategory(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
 }
 
 void HooksDebugModule::RenderMenuEntry() {
