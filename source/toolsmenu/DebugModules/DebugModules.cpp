@@ -17,7 +17,7 @@
 #include "CStreamingDebugModule.h"
 #include "CPickupsDebugModule.h"
 #include "CDarkelDebugModule.h"
-#include "HooksDebugModule.h"
+#include "HooksDebugModule/HooksDebugModule.h"
 #include "CTeleportDebugModule.h"
 #include "ParticleDebugModule.h"
 #include "PostEffectsDebugModule.h"

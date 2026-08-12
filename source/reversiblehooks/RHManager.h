@@ -26,7 +26,7 @@ public:
     ~RHManager() = default;
 
 public:
-    RootHookCategory& GetRootCategory() noexcept { return m_RootHookCategory; }
+    auto GetRootCategory() noexcept { return m_RootHookCategory; }
 
     enum class SetCatOrItemStateResult {
         NotFound,
@@ -217,7 +217,7 @@ public: // Script hooking functions //
     );
 
 private:
-    RootHookCategory            m_RootHookCategory{};
-    HooksCheckClock::time_point m_LastHooksCheckTime{ HooksCheckClock::now() };
+    std::shared_ptr<ReversibleHooks::RootHookCategory> m_RootHookCategory{ std::make_shared<ReversibleHooks::RootHookCategory>() };
+    HooksCheckClock::time_point                        m_LastHooksCheckTime{ HooksCheckClock::now() };
 };
 }; // namespace ReversibleHooks

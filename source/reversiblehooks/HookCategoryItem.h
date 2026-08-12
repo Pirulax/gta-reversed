@@ -11,6 +11,8 @@ class HookCategory;
 
 class HookCategoryItem {
     using HookPtr   = std::shared_ptr<ReversibleHook::TwoWayHook>;
+
+public:
     using HookState = ReversibleHook::TwoWayHookState;
 
 public:

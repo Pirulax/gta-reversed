@@ -26,6 +26,7 @@ using namespace ImGui;
 
 constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
 
+#if 0
 // Clears both filters
 // Making all items visible again is done by `DoFilter`
 void HooksDebugModule::HookFilter::ClearFilters() {
@@ -406,6 +407,7 @@ void HooksDebugModule::HookFilter::Render() {
     }
     PopItemWidth();
 }
+#endif
 
 bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
     if (m_SlideSetter.Mode == SlideSetterMode::NONE || !IsItemHovered()) {
@@ -490,100 +492,49 @@ auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false)
     }
 }
 
-void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
-    for (auto& item : cat.Items()) {
-        if (!item.GetMatchesSearchFilter()) {
-            continue;
-        }
-
-        notsa::ui::ScopedID idg{ item.GetName() };
+#if 1
+void HooksDebugModule::RenderCategoryItems(const StepsCategory& cat) {
+    for (auto& item : cat.Items) {
+        notsa::ui::ScopedID idg{ item.Name };
 
         // Draw hook symbol
         {
             PushStyleVar(ImGuiStyleVar_Alpha, GetStyle().Alpha * 0.5f);
             AlignTextToFramePadding();
-            Text(item.GetTypeSymbolUI());
+            Text("T"); //Text(item.GetTypeSymbolUI());
             PopStyleVar();
         }
 
         // State checkbox
         {
             StateButton(
-                item.GetName().c_str(),
-                item.GetIsStateLocked(),
-                item.GetState() == HookState::Unhooked
+                item.Name.c_str(),
+                item.Item->GetIsStateLocked(),
+                item.Item->GetState() == HookState::Unhooked
                     ? ImTristate::NONE
                     : ImTristate::ALL,
-                item.GetState(),
-                item.GetState() == HookState::RedirectToOurs
+                item.Item->GetState(),
+                item.Item->GetState() == HookState::RedirectToOurs
                     ? HookState::RedirectToGTA
                     : HookState::RedirectToOurs,
-                [&](HookState s) { cat.SetItemState(item, s); },
-                [&]() { cat.SetItemState(item, item.GetPreviousState()); }
+                [&] (HookState s) { item.Item->SetState(s); },
+                [&] () { item.Item->SetToPreviousState(); }
             );
-
-            //IDScope("state");
-            //DisabledScope(item.GetIsStateLocked());
-
-
-            //SameLine(); 
-            //bool checked        = item.GetState() != HookState::Unhooked;
-            //if (Checkbox("##on-off", &checked)) {
-            //    cat.SetItemState(item, checked ? item.GetPreviousState() : HookState::Unhooked);
-            //}
-            //
-            //SameLine();
-            //const auto next = item.GetState() == HookState::RedirectToOurs
-            //    ? HookState::RedirectToGTA
-            //    : HookState::RedirectToOurs;
-            //if (Button(StateToString(item.GetState()), STATE_BUTTON_SIZE) && !item.GetIsStateLocked()) {
-            //    cat.SetItemState(item, next);
-            //}
-            //if (!item.GetIsStateLocked() && IsItemHovered()) {
-            //    SetTooltip("Change to: %s", StateToString(next));
-            //}
-            //
-            //SameLine();
-            //TextUnformatted(item.GetName().c_str());
-
-
-            //if (SameLine(); CheckboxTristate(item.GetName().c_str(), item.GetStateUI(), checked) && !item.GetIsStateLocked()) { 
-            //    cat.SetItemState(item,
-            //        IsKeyDown(ImGuiMod_Alt)
-            //            ? HookState::Unhooked
-            //            : checked
-            //                ? HookState::RedirectToOurs
-            //                : HookState::RedirectToGTA
-            //    );
-            //}
-            //if (IsItemHovered()) {
-            //    SetTooltip(
-            //        "Currently state: %s"
-            //        "Left click: Redirect to Our/GTA code\n"
-            //        "Left click + Alt: Unhook\n"
-            //        "Middle click: Toggle (Slide setter)\n"
-            //        "Right click + hold: Slide setter (Enable/disable all hovered items)\n",
-            //        EnumToString(item.GetState()).value_or("Unknown")
-            //    );
-            //}
-            //if (!item.GetIsStateLocked() && HandleSlideSetterForItem(checked)) {
-            //    cat.SetItemState(item, checked ? HookState::RedirectToOurs : HookState::RedirectToGTA);
-            //}
         }
 
         if (!IsItemHovered()) {
             continue;
         }
 
-        const auto gta = item.GetHookAddressGTA(),
-                   our = item.GetHookAddressOur();
+        const auto gta = item.Item->GetHookAddressGTA(),
+                   our = item.Item->GetHookAddressOur();
         if (gta && our) {
             const auto AddrToClipboard = [](void* addr) {
                 SetClipboardText(std::format("{}", addr).c_str());
             };
 
             std::string tooltipText = std::format("SA: {} / Our: {}", gta, our);
-            if (item.GetIsStateLocked()) {
+            if (item.Item->GetIsStateLocked()) {
                 tooltipText += "\n(locked)";
             }
             SetTooltip(tooltipText.c_str());
@@ -597,14 +548,11 @@ void HooksDebugModule::RenderCategoryItems(RH::HookCategory& cat) {
     }
 }
 
-void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
-    if (!cat.Visible()) {
-        return;
-    }
-    notsa::ui::ScopedID idg{ cat.Name() };
+void HooksDebugModule::RenderCategory(const StepsCategory& cat) {
+    notsa::ui::ScopedID idg{ cat.Name };
 
     const auto TreeNodeWithCheckbox = [](
-        auto                                            label,
+        const char*                                            label,
         bool                                            disabled,
         bool                                            hasAnyUnhooked,
         ReversibleHooks::HookCategory::CommonItemsState commonState,
@@ -655,80 +603,98 @@ void HooksDebugModule::RenderCategory(RH::HookCategory& cat) {
 
     // Disable all hooks in category at once
     {
-        SetNextItemOpen(cat.Open());
-
+        if (cat.TotalFilterScore > 0.f) {
+            SetNextItemOpen(true);
+        }
 
         const auto [open, stateChanged] = TreeNodeWithCheckbox(
-            cat.Name().c_str(),
-            cat.IsLocked(),
-            cat.HasAnyUnhooked(),
-            cat.OverallState(),
-            cat.OverallState().value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+            cat.Name.c_str(),
+            !cat.AnyUnlockedItems,
+            cat.AnyUnhookedItems,
+            cat.CommonStateAllItems,
+            //cat.CommonStateAllItems.value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+            cat.CommonStateAllItems.value_or(HookState::RedirectToOurs) == HookState::RedirectToOurs
                 ? HookState::RedirectToGTA
                 : HookState::RedirectToOurs,
-            [&](HookState s) { cat.SetAllItemsState(s); },
-            [&] () { cat.SetAllItemsToPreviousState(); }
+            [&] (HookState s) { NOTSA_LOG_ERR("TODO"); }, // cat.SetAllItemsState(s);
+            [&] () { NOTSA_LOG_ERR("TODO"); } // cat.SetAlStepItemsToPreviousState();
         );
         //if (stateChanged) {
-        //    cat.ToggleAllItemsState();
+        //    cat.ToggleAlStepItemsState();
         //}
         //if (bool state = cbState; HandleSlideSetterForItem(state)) {
-        //    cat.SetAllItemsState(state);
+        //    cat.SetAlStepItemsState(state);
         //}
-        cat.Open(open);
+        //cat.Open(open);
     }
 
-    if (!cat.Open()) {
+    if (!IsItemToggledOpen()) {
         return;
     }
+
+    //if (!cat.Open()) {
+    //    return;
+    //}
 
     //
     // Draw hooks, and subcategories
     //
 
     // Draw hooks (items) (if any)
-    if (!cat.Items().empty() && cat.m_anyItemsVisible) {
-        if (cat.SubCategories().empty()) { // If there are no subcategories we can draw all items directly
+    if (!cat.Items.IsEmpty()) {
+        if (cat.SubCategories.IsEmpty()) { // If there are no subcategories we can draw all items directly
             RenderCategoryItems(cat);
         } else { // Otherwise use a tree node + checkbox for them
-            const auto [open, stateChanged] = TreeNodeWithCheckbox(
-                "Hooks",
-                cat.AreItemsLocked(),
-                cat.m_AnyOurItemsUnhooked,
-                cat.ItemsState(),
-                cat.ItemsState().value_or(cat.m_LastSetOurState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
-                    ? HookState::RedirectToGTA
-                    : HookState::RedirectToOurs,
-                [&](HookState s) { cat.SetOurItemsState(s); },
-                [&] () { cat.SetOurItemsToPreviousState(); }
-            );
-
-            if (stateChanged) {
-                //cat.SetOurItemsState(cbState);
-                //cat.ToggleAllItemsState();
-                NOTSA_UNREACHABLE("todo");
-            }
-
-            if (open) {
-                RenderCategoryItems(cat);
-                TreePop();
-            }
+            NOTSA_LOG_ERR("TODO");
+            //const auto [open, stateChanged] = TreeNodeWithCheckbox(
+            //    "Hooks",
+            //    cat.AreItemsLocked(),
+            //    cat.m_AnyOurItemsUnhooked,
+            //    cat.ItemsState(),
+            //    cat.ItemsState().value_or(cat.m_LastSetOurState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+            //        ? HookState::RedirectToGTA
+            //        : HookState::RedirectToOurs,
+            //    [&](HookState s) { cat.SetOurItemsState(s); },
+            //    [&] () { cat.SetOurItemsToPreviousState(); }
+            //);
+            //
+            //if (stateChanged) {
+            //    //cat.SetOurItemsState(cbState);
+            //    //cat.ToggleAlStepItemsState();
+            //    NOTSA_UNREACHABLE("todo");
+            //}
+            //
+            //if (open) {
+            //    RenderCategoryItems(cat);
+            //    TreePop();
+            //}
         }
     }
 
     // Draw subcategories
-    for (auto& v : cat.SubCategories()) {
+    for (auto& v : cat.SubCategories) {
         RenderCategory(v);
     }
 
     TreePop();
 }
+#endif
 
 void HooksDebugModule::RenderWindow() {
     const notsa::ui::ScopedWindow window{ "ReversibleHooks (TM) (R)", {500.f, 700.f}, m_IsOpen, ImGuiWindowFlags_MenuBar };
     if (!m_IsOpen) {
         return;
     }
+
+    m_Processor.PushSteps(HooksListStepsPtr{ new HooksListSteps{
+        .BuildStep{ RH::RHManager::GetInstance().GetRootCategory() },
+        .FilterStep{ m_FilterInput }
+    } });
+    const auto processed = m_Processor.GetResult();
+    if (!processed) {
+        return;
+    }
+
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Tools")) {
             if (ImGui::MenuItem("Export hooks.csv")) {
@@ -740,6 +706,21 @@ void HooksDebugModule::RenderWindow() {
         }
         ImGui::EndMenuBar();
     }
+
+    PushItemWidth(GetWindowContentRegionMax().x - 10.f);
+    InputText(" ", &m_FilterInput);
+    if (IsItemHovered()) {
+        SetTooltip(
+            "`::function`         - Filters only functions \n"
+            "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
+            "`ped/player`         - Should only show Ped/CPlayerPed\n"
+            "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
+            "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
+            "For more tips see gta-reversed-modern/discussions/190\n"
+        );
+    }
+    PopItemWidth();
+
     m_SlideSetter.Mode = IsMouseDown(ImGuiMouseButton_Middle)
         ? SlideSetterMode::TOGGLE
         : IsMouseDown(ImGuiMouseButton_Right)
@@ -747,8 +728,10 @@ void HooksDebugModule::RenderWindow() {
                 ? m_SlideSetter.Mode // Technically in setter mode already
                 : SlideSetterMode::SETTER
             : SlideSetterMode::NONE;
-    m_HookFilter.Render();
-    RenderCategory(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
+
+
+    //m_HookFilter.Render();
+    //RenderCategory(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
 }
 
 void HooksDebugModule::RenderMenuEntry() {

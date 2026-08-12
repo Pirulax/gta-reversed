@@ -111,6 +111,7 @@ add_dependency(
     imgui
     libjpeg-turbo
     SDL3
+    boost
 )
 
 target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
@@ -127,6 +128,7 @@ target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
     strmiids
     d3d9
     SDL3::SDL3
+    boost::boost
 )
 
 

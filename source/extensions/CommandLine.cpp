@@ -95,7 +95,8 @@ void ApplyHookSettings() {
     };
 
     if (CommandLine::s_UnhookAll || !CommandLine::s_UnhookExcept.empty()) {
-        rh->GetRootCategory().SetAllItemsState(ReversibleHooks::ReversibleHook::TwoWayHookState::RedirectToGTA);
+        NOTSA_UNREACHABLE("TODO");
+        //rh->GetRootCategory()->SetAllItemsState(ReversibleHooks::ReversibleHook::TwoWayHookState::RedirectToGTA);
 
         NOTSA_LOG_DEBUG("Unhooked all via command-line");
         for (const auto& item : CommandLine::s_UnhookExcept) {

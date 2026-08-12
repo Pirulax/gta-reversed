@@ -20,12 +20,14 @@ class saRecipe(ConanFile):
         "imgui/1.91.5-docking",
         "sdl/3.2.6",
         "libjpeg-turbo/3.1.0",
+        "boost/1.91.0"
     ]
 
     default_options = {
         "spdlog/*:use_std_fmt": True,
+        "boost/*:header_only": True,
         "with_command_hooks": False,
-        "use_sdl3": True
+        "use_sdl3": True,
     }
 
     options = {

@@ -13,9 +13,8 @@ namespace ReversibleHooks {
 class RootHookCategory : public HookCategory {
 public:
     RootHookCategory() :
-        HookCategory{ "Root", nullptr} // Root has no parent
+        HookCategory{ "Root", std::shared_ptr<HookCategory>{nullptr} } // Root has no parent
     {
-        m_isOpen = true; // Root should be opened by default
     }
 
     RootHookCategory(const RootHookCategory&) = delete;
@@ -25,13 +24,12 @@ public:
     void AddItemToNamedCategory(std::string_view categoryList, HookCategoryItem hook) {
         assert(!categoryList.empty()); // Should never be empty. To add to global category use `RH_ScopedCategoryGlobal()`
 
-        HookCategory* cat = this; // Start with us (the root category)
-
+        auto cat = shared_from_this();
         for (auto&& catName : SplitStringView(categoryList, "/")) {
-            cat = &cat->FindOrCreateSubcategory(catName);
+            cat = cat->FindOrCreateSubcategory(catName);
         }
 
-        assert(cat != this); // Make sure item doesn't get added into us (As the root category should have no items)
+        assert(cat.get() != this); // Make sure item doesn't get added into us (As the root category should have no items)
         cat->AddItem(std::move(hook)); // The last category is where we add the item to
     }
 };

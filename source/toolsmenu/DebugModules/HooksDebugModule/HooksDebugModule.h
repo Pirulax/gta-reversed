@@ -1,11 +1,18 @@
 #pragma once
 
-#include "DebugModule.h"
+#include <thread>
+#include <string>
+#include <string_view>
+
+#include <toolsmenu/DebugModules/DebugModule.h>
+
+#include "HooksProcessingThread.h"
 
 namespace ReversibleHooks {
 class HookCategory;
 };
 
+namespace RHDebugModule {
 class HooksDebugModule final : public DebugModule {
     enum class SlideSetterMode {
         NONE,
@@ -27,8 +34,8 @@ private:
     public:
         void Render();
 
-        friend void from_json(const json& j, HookFilter& m) { j.at("m_Input").get_to(m.m_Input); m.OnInputUpdate(); }
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE_ONLY_SERIALIZE(HookFilter, m_Input, m_IsCaseSensitive);
+        //friend void from_json(const json& j, HookFilter& m) { j.at("m_Input").get_to(m.m_Input); m.OnInputUpdate(); }
+        //NLOHMANN_DEFINE_TYPE_INTRUSIVE_ONLY_SERIALIZE(HookFilter, m_Input, m_IsCaseSensitive);
 
     private:
         void ClearFilters();
@@ -83,17 +90,21 @@ public:
     void RenderWindow() override final;
     void RenderMenuEntry() override final;
 
-    NOTSA_IMPLEMENT_DEBUG_MODULE_SERIALIZATION(HooksDebugModule, m_IsOpen, m_HookFilter);
+    NOTSA_IMPLEMENT_DEBUG_MODULE_SERIALIZATION(HooksDebugModule, m_IsOpen, m_FilterInput);
 
 private:
-    void RenderCategoryItems(ReversibleHooks::HookCategory& cat);
-    void RenderCategory(ReversibleHooks::HookCategory& cat);
+    void RenderCategoryItems(const StepsCategory& cat);
+    void RenderCategory(const StepsCategory& cat);
     bool HandleSlideSetterForItem(bool& inOutState); // Returns if state changed
 
 private:
+    std::string m_FilterInput{};
     bool m_IsOpen{};
     struct {
         SlideSetterMode Mode;
     } m_SlideSetter{};
     HookFilter m_HookFilter{};
+    HooksProcessingThread m_Processor{};
 };
+}; // namespace RHDebugModule
+using HooksDebugModule = RHDebugModule::HooksDebugModule;

@@ -62,6 +62,22 @@ public:
     //    assert(items[0].m_pNext == nullptr);
     //}
 
+    TList_c() = default;
+    TList_c(const TList_c&) = delete;
+    TList_c(TList_c&& other) {
+        *this = std::move(other);
+    }
+
+    TList_c& operator=(const TList_c&) = delete;
+    TList_c& operator=(TList_c&& other) {
+        if (this != &other) {
+            m_head = std::exchange(other.m_head, nullptr);
+            m_tail = std::exchange(other.m_tail, nullptr);
+            m_cnt  = std::exchange(other.m_cnt, 0);
+        }
+        return *this;
+    }
+
     //! Add item to the beginning (head) of the list
     void AddItem(T* item) {
         assert(item);
@@ -84,7 +100,7 @@ public:
     }
 
     //! @brief Add item to the end (tail) of the list
-    void AppendItem(T* item) {
+    T* AppendItem(T* item) {
         assert(item);
         assert(item != m_tail); // Double insertion
         assert(item != m_head); // Double insertion
@@ -102,31 +118,26 @@ public:
         }
 
         ++m_cnt;
+    
+        return item;
     }
 
     //! @brief Insert `item` after `after`
-    void InsertAfterItem(T* item, T* after) {
-        ++m_cnt; // BUG: We increment count even though the item wasn't added to table, and there's no certainity that it will
-        if (!m_head) {
-            return;
-        }
+    auto InsertAfterItem(T* item, iterator after) {
+        assert(m_tail && m_head && m_cnt > 0 && "`after` can't be part of an empty list");
 
-        // NOTE: ???? Just use `after->m_pPrev`, no?
-        auto curItem = GetHead();
-        while (curItem && curItem != after)
-            curItem = GetNext(curItem);
+        m_cnt++;
 
-        if (!curItem)
-            return;
+        item->m_pPrev = after.m_ptr;
 
-        item->m_pPrev = curItem;
-        item->m_pNext = curItem->m_pNext;
-        auto* pOldNext = curItem->m_pNext;
-        curItem->m_pNext = item;
-        if (pOldNext)
-            pOldNext->m_pPrev = item;
-        else
+        auto* const next = item->m_pNext = after.m_ptr->m_pNext;
+        if (next) {
+            next->m_pPrev = item;
+        } else {
             m_tail = item;
+        }
+        
+        return item;
     }
 
     void InsertBeforeItem(T* addedItem, T* pExistingItem) {
@@ -247,6 +258,21 @@ public:
                 }
             }
             return result;
+        }
+    }
+
+    /*!
+     * @brief Filter items in-place
+     */
+    template<std::predicate<T&> Pred>
+    void Filter(Pred&& pred) {
+        auto* item = GetHead();
+        while (item) {
+            auto* next = GetNext(item);
+            if (!std::invoke(pred, *item)) {
+                RemoveItem(item);
+            }
+            item = next;
         }
     }
 

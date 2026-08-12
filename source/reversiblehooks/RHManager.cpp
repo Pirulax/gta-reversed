@@ -41,7 +41,7 @@ void RHManager::CheckAll() {
     return;
     if (const auto now = HooksCheckClock::now(); now - m_LastHooksCheckTime > HOOKS_CHECK_INTERVAL) {
         m_LastHooksCheckTime = now;
-        m_RootHookCategory.ForEachItem([](HookCategoryItem& item) {
+        m_RootHookCategory->ForEachItem([](HookCategoryItem& item) {
             item.GetHook()->Check();
         });
     }
@@ -75,7 +75,7 @@ void RHManager::InstallVirtual(
 }
 
 void RHManager::AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook) {
-    GetRootCategory().AddItemToNamedCategory(category, {
+    GetRootCategory()->AddItemToNamedCategory(category, {
         std::move(hook),
         opt.Locked,
         opt.Reversed,
@@ -98,13 +98,13 @@ void RHManager::WriteHooksToFile(const std::filesystem::path& file) {
     const auto path = std::filesystem::weakly_canonical(file);
     if (std::ofstream of{ file }) {
         of << "class,fn_name,address,reversed,locked,type\n";
-        GetRootCategory().ForEachCategory([&] (const HookCategory& cat) {
+        GetRootCategory()->ForEachCategory([&] (const HookCategory& cat) {
             using namespace ReversibleHook;
             for (const auto& item : cat.Items()) {
-                if (item.GetType() == HookType::ScriptCommand) {
+                if (item->GetType() == HookType::ScriptCommand) {
                     continue;
                 }
-                item.PrintToCSV(of, cat);
+                item->PrintToCSV(of, cat);
             }
         });
         NOTSA_LOG_INFO("Hooks written to `{}`", path.string());
