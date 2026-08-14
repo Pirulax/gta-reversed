@@ -11,6 +11,7 @@
 #include "HooksBuildListStep.h"
 #include "HooksFilterListStep.h"
 
+#if 0
 namespace RHDebugModule {
 struct HooksListSteps {
     HooksBuildListStep  BuildStep;
@@ -18,7 +19,7 @@ struct HooksListSteps {
 
     StepsCategory*    Result{ nullptr };
 };
-using HooksListStepsPtr = std::unique_ptr<HooksListSteps>;
+using HooksListStepsPtr = std::shared_ptr<HooksListSteps>;
 
 class HooksProcessingThread {
 public:
@@ -38,3 +39,4 @@ private:
     bool                    m_ShouldExit{ false }; //!< If true, the thread should exit
 };
 }; // namespace RHDebugModule
+#endif

@@ -1,30 +1,19 @@
 #include "StdInc.h"
-
+#include "Base.h"
 #include <imgui.h>
 #include <libs/imgui/misc/cpp/imgui_stdlib.h>
+#include <boost/static_string.hpp>
+#include <iterator>
+
 
 #include "HookFilter.h"
 
-//void HookFilter::Draw() {
-//    ImGui::PushItemWidth(ImGui::GetWindowContentRegionMax().x - 10.f);
-//    if (ImGui::InputTextWithHint(
-//        "##HookFilter",
-//        "`::function`         - Filters only functions \n"
-//        "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
-//        "`ped/player`         - Should only show Ped/CPlayerPed\n"
-//        "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
-//        "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
-//        "For more tips see gta-reversed-modern/discussions/190\n",
-//        &m_Input
-//    )) {
-//        CalculateFilterFromInput();
-//    }
-//    ImGui::PopItemWidth();
-//}
+HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cutoffs cutoffs) :
+    m_IsCaseSensitive{ caseSensitive },
+    m_Cutoffs{ cutoffs }
+{
+    const auto input = notsa::trim_string(untrimmedInput);
 
-HookFilter::HookFilter(std::string_view input) {
-    input = notsa::trim_string(input);
-    
     if (input.empty()) {
         return;
     }
@@ -38,16 +27,21 @@ HookFilter::HookFilter(std::string_view input) {
         const auto namespaceSepPos = input.rfind(HOOK_FILTER_SEP);
         const auto hasNamespaceSep = namespaceSepPos != std::string_view::npos;
 
-        // First half (if any), or the whole input is the namespace filter
-        const auto namespaceStr = hasNamespaceSep
+        // First half (if any), or the whole input is the category path filter
+        const auto categoryPathStr = hasNamespaceSep
             ? input.substr(0, namespaceSepPos)
             : input;
-        if (!namespaceStr.contains(INVALID_NAMESPACE_FILTER_CHARS)) {
-            for (auto t : SplitStringView(namespaceStr, NAMESPACE_SEP)) {
-                m_NamespaceTokens.emplace_back(notsa::trim_string(t));
+        if (!categoryPathStr.contains(INVALID_CAT_PATH_CHARS)) {
+            for (auto t : SplitStringView(categoryPathStr, NAMESPACE_SEP)) {
+                m_CategoryPathTokens.emplace_back(notsa::trim_string(t));
+            }
+            if (m_CategoryPathTokens.size() == 1 && m_CategoryPathTokens.front().empty()) {
+                m_CategoryPathTokens.clear(); // An empty string would match all strings, so there's no point in keeping it
+            }
+            if (m_CategoryPathTokens.size() > 1 && m_CategoryPathTokens.front().empty()) { // Eg.: `/...`
+                m_CategoryPathTokens[0] = ReversibleHooks::RootHookCategory::GetRootName(); // This corresponds to the root namespace filter
             }
         }
-
         // Second half (if any) or the whole input is the hook filter
         const auto hookFilterStr = hasNamespaceSep
             ? notsa::trim_string(input.substr(namespaceSepPos + HOOK_FILTER_SEP.size()))
@@ -60,14 +54,18 @@ HookFilter::HookFilter(std::string_view input) {
             }
         }
 
-        m_IsSimpleGlobalFilter = !hasNamespaceSep && m_NamespaceTokens.size() == 1 && IsHookFilterActive();
+        m_IsSimpleFilterString = !hasNamespaceSep && IsFilteringByCategoryName() && IsHookFilterActive();
     }
 
     // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
     // We have have to remove all the leading empty tokens up until the last empty one.
-    while (m_NamespaceTokens.size() >= 2 && m_NamespaceTokens[0].empty() && m_NamespaceTokens[1].empty()) {
-        m_NamespaceTokens.erase(m_NamespaceTokens.begin());
+    while (m_CategoryPathTokens.size() >= 2 && m_CategoryPathTokens[0].empty() && m_CategoryPathTokens[1].empty()) {
+        m_CategoryPathTokens.erase(m_CategoryPathTokens.begin());
     }
+}
+
+HookFilter::~HookFilter() {
+    NOTSA_LOG_DEBUG("des");
 }
 
 
@@ -76,62 +74,106 @@ bool HookFilter::IsHookFilterActive() const noexcept {
 }
 
 float HookFilter::MatchItem(
-    std::string_view name,
+    std::string_view lowerCaseName,
     void*            addressA,
     void*            addressB
 ) const noexcept {
-    auto matches = false;
+    float score = 0.0;
+    const auto DoTest = [&](std::string_view str, float cutoff) {
+        score = std::max(score, MatchString(str, *m_HookFilter, cutoff, m_IsCaseSensitive));
+    };
     if (m_HookFilterByName) {
-        matches |= StringContainsString(name, *m_HookFilter, m_IsCaseSensitive);
+        DoTest(lowerCaseName, IsSimpleFilterString() ? m_Cutoffs.ItemGlobal : m_Cutoffs.ItemLocal);
     }
     if (m_HookFilterByAddress) {
-        const auto CheckContainsAddress = [&] (void* addr) {
-            char buf[64]{ "0x" };
-            const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(addr), 16);
-            if (ec != std::errc{}) {
-                return false;
+        for (auto address : { addressA, addressB }) {
+            if (!address) {
+                continue;
             }
-            return StringContainsString(std::string_view{ buf, end }, *m_HookFilter, false);
-        };
-        matches |= CheckContainsAddress(addressA) || CheckContainsAddress(addressB);
+            char buf[64]{ "0x" };
+            const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(address), 16);
+            if (ec != std::errc{}) {
+                continue;
+            }
+            DoTest({ buf, end }, m_Cutoffs.ItemAddress);
+        }
     }
-    return matches
-        ? 1.0f
-        : 0.f;
+    return static_cast<float>(score);
 }
 
-bool HookFilter::IsNamespaceFilterActive() const noexcept {
-    if (m_NamespaceTokens.empty()) {
-        return false; // No tokens, no filter
+bool HookFilter::IsFilteringByCategoryPath() const noexcept {
+    if (m_CategoryPathTokens.empty()) {
+        return false; // No tokens
     }
-    if (IsRootRelativeNamespace() && m_NamespaceTokens.size() == 1) {
-        return false; // Only the root namespace is specified, so we're effectively not filtering anything, eg.: input was `/`, `/::`, `::`
+    if (IsFilteringByCategoryName()) {
+        return false; // Only filtering by category name, not path
     }
     return true;
 }
 
-float HookFilter::MatchCategoryByNamespace(
-    const NamespaceTokens& path,
-    size_t               depth
-) const noexcept {
-    NOTSA_UNREACHABLE("todo");
-    //const auto Match = [&](size_t nsTokenIdx) {
-    //    return StringContainsString(name, m_NamespaceTokens[nsTokenIdx], m_IsCaseSensitive)
-    //        ? 1.0f
-    //        : 0.f;
+float HookFilter::MatchCategoryByNamespace(const NamespaceTokens& ns, size_t depth) const noexcept {
+    //const auto MatchRanges = [&] (int32 start, int32 stop, int32 step) {
+    //    for (int32 i = start; i < stop; i += step) { // 10
+    //           
+    //    }
+    //};
+
+    float total = 0.f;
+    const auto Match = [&, cutoff = IsSimpleFilterString() ? m_Cutoffs.CategoryGlobal : m_Cutoffs.Category] (size_t i) {
+        const auto match = MatchString(ns[i], m_CategoryPathTokens[i], cutoff, m_IsCaseSensitive);
+        total += match;
+        return match > 0.f;
+    };
+
+    if (IsRootRelativeNamespace()) { // Root must match from the front -> back
+        for (size_t i = 0; i < m_CategoryPathTokens.size(); i++) {
+            if (i >= ns.size()) { 
+                break; // We can't match now, but might match later
+            }
+            if (!Match(i)) {
+                return 0.f; // Part didn't match
+            }
+        }
+    } else { // This should match from back -> front
+        for (size_t i = m_CategoryPathTokens.size(); i --> 0;) {
+            if (i >= ns.size()) { 
+                return false; // Can't match whole, so just stop now
+            }
+            if (!Match(i)) {
+                return 0.f; // Part didn't match
+            }
+        }
+    }
+
+    return total;
+
+
+    //const auto Match = [&](size_t i) {
+    //    return MatchString(ns[i], m_NamespaceTokens[i], m_Cutoff, m_IsCaseSensitive);
+    //    //return StringContainsString(name, m_NamespaceTokens[nsTokenIdx], m_IsCaseSensitive)
+    //    //    ? 1.0f
+    //    //    : 0.f;
     //};
     //if (IsRootRelativeNamespace()) {
-    //    if (depth == 0) {
-    //        return 1.f; // Root always matches
-    //    }
     //    if (depth < m_NamespaceTokens.size()) {
     //        return 0.f; // Not enough tokens to match
     //    }
-    //    return StringContainsString(path[depth], m_NamespaceTokens[depth], m_IsCaseSensitive)
-    //        ? 1.0f
-    //        : 0.f;
+    //    return Match(depth);
     //}
-    //return Match(std::min(depth, m_NamespaceTokens.size() - 1));
+    //return rng::fold_left(rng::views::iota(0u, m_NamespaceTokens.size()), 0.f, [&](float max, size_t i) {
+    //    if (depth + i >= ns.size()) {
+    //        return max; // Not enough tokens to match
+    //    }
+    //    return std::max(max, Match(depth + i));
+    //});
+    //float match = 0.f;
+    //for (size_t i = 0; i < m_NamespaceTokens.size(); ++i) {
+    //    if (depth + i >= ns.size()) {
+    //        break; // Not enough tokens to match
+    //    }
+    //    match = std::max(match, Match(depth + i));
+    //}
+    //return match;
 
     //const auto Match = [this](const auto& range) -> float {
     //    float score = 0.f;
@@ -159,8 +201,33 @@ float HookFilter::MatchCategoryByNamespace(
 }
 
 float HookFilter::MatchCategoryByName(std::string_view name) const noexcept {
-    assert(m_NamespaceTokens.size() == 1);
-    return StringContainsString(name, m_NamespaceTokens.back(), m_IsCaseSensitive)
-        ? 1.0f
-        : 0.f;
+    assert(m_CategoryPathTokens.size() == 1);
+    return MatchString(name, m_CategoryPathTokens.front(), m_Cutoffs.CategoryGlobal, m_IsCaseSensitive);
+}
+
+float HookFilter::MatchString(std::string_view haystack, std::string_view needle, float cutoff, bool caseSensitive) const noexcept {
+    if (haystack.empty() || needle.empty()) {
+        return 0.f;
+    }
+    const auto CalculateScore = [&] (size_t pos) {
+        if (pos == std::string_view::npos) {
+            return 0.f;
+        }
+        if (haystack.size() == needle.size()) {
+            return 1.f;
+        }
+        const auto score = (float)(needle.size()) / (float)(haystack.size() + pos);
+        return score >= cutoff ? score : 0.f;
+        };
+    if (caseSensitive) {
+        return CalculateScore(haystack.find(needle));
+    }
+    const auto ToUpper = [](auto&& c) {
+        return (char)(std::toupper((unsigned char)(c)));
+        };
+    const auto range = rng::search(haystack, needle, {}, ToUpper, ToUpper);
+    if (range.empty()) {
+        return 0.f;
+    }
+    return CalculateScore(rng::distance(haystack.begin(), range.begin()));
 }

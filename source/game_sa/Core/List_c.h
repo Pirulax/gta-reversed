@@ -44,6 +44,10 @@ public:
     using iterator       = BaseIterator<T>;
     using const_iterator = BaseIterator<const T>;
 
+    using value_type     = T;
+    using pointer        = T*;
+    using reference      = T&;
+
 public:
     //static void Test() {
     //    struct Item : ListItem_c<Item> {
@@ -79,7 +83,7 @@ public:
     }
 
     //! Add item to the beginning (head) of the list
-    void AddItem(T* item) {
+    void AddItem(T* item) { // TODO: This really should take `T&`
         assert(item);
         assert(item != m_tail); // Double insertion
         assert(item != m_head); // Double insertion
@@ -97,6 +101,11 @@ public:
         }
 
         ++m_cnt;
+    }
+
+    //! For `std` compatibility
+    void push_back(T& item) {
+        AppendItem(&item);
     }
 
     //! @brief Add item to the end (tail) of the list
@@ -163,7 +172,7 @@ public:
             m_head = addedItem;
     }
     
-    void RemoveItem(T* item) {
+    T* RemoveItem(T* item) {
         assert(item);
         assert(item->m_pPrev != m_tail);
         assert(item->m_pNext != m_head);
@@ -182,6 +191,8 @@ public:
         }
 
         m_cnt--;
+
+        return item;
     }
 
     void RemoveAll() {
@@ -276,12 +287,29 @@ public:
         }
     }
 
+    /*!
+     * @brief Sort list using predicate
+     */
+    void Sort(std::predicate<T&, T&> auto&& pred) {
+        if (m_cnt < 2) {
+            return;
+        }
+
+        m_head = MergeSort(m_head, pred);
+
+        m_tail = m_head;
+        while (m_tail->m_pNext) {
+            m_tail = m_tail->m_pNext;
+        }
+    }
+
     T*   GetNext(T* item) const { assert(item); return item->m_pNext; }
     T*   GetPrev(T* item) const { assert(item); return item->m_pPrev; }
     T*   GetHead()        const { return m_head; }
     T*   GetTail()        const { return m_tail; }
 
     auto GetNumItems()    const { return m_cnt; }
+    auto GetSize()        const { return m_cnt; }
 
     auto cbegin()         const { return const_iterator{ GetHead() }; }
     auto begin()          const { return cbegin(); }
@@ -295,8 +323,72 @@ public:
     auto IsEmpty()        const { return m_head == nullptr; }
 
 private:
+    template<typename Pred>
+    static T* MergeSort(T* head, Pred& pred) {
+        if (!head || !head->m_pNext) {
+            return head;
+        }
+
+        auto* const second = Split(head);
+        return Merge(MergeSort(head, pred), MergeSort(second, pred), pred);
+    }
+
+    // Split a list in two, returning the head of the latter half.
+    static T* Split(T* head) {
+        auto* slow = head;
+        auto* fast = head->m_pNext;
+
+        while (fast && fast->m_pNext) {
+            slow = slow->m_pNext;
+            fast = fast->m_pNext->m_pNext;
+        }
+
+        auto* const second = slow->m_pNext;
+        slow->m_pNext = nullptr;
+        second->m_pPrev = nullptr;
+        return second;
+    }
+
+    // Merge two sorted lists. Equal items remain in their original order.
+    template<typename Pred>
+    static T* Merge(T* left, T* right, Pred& pred) {
+        T* head = nullptr;
+        T* tail = nullptr;
+
+        const auto append = [&head, &tail](T* item) {
+            item->m_pPrev = tail;
+            item->m_pNext = nullptr;
+            if (tail) {
+                tail->m_pNext = item;
+            } else {
+                head = item;
+            }
+            tail = item;
+        };
+
+        while (left && right) {
+            if (std::invoke(pred, *right, *left)) {
+                auto* const item = right;
+                right = right->m_pNext;
+                append(item);
+            } else {
+                auto* const item = left;
+                left = left->m_pNext;
+                append(item);
+            }
+        }
+
+        for (auto* remaining = left ? left : right; remaining;) {
+            auto* const item = remaining;
+            remaining = remaining->m_pNext;
+            append(item);
+        }
+
+        return head;
+    }
+
     T*     m_head{};
     T*     m_tail{};
     size_t m_cnt{};
 };
-using List_c = TList_c<void>;
+using List_c = TList_c<int>; // using int so the compiler doesn't complain about void&

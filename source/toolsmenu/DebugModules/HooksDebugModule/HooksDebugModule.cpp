@@ -1,10 +1,9 @@
 #include "StdInc.h"
 
 #include <string>
-#include <ranges>
+#include <chrono>
 #include <optional>
 #include <format>
-#include <charconv>
 
 #include <imgui.h>
 #include <libs/imgui/misc/cpp/imgui_stdlib.h>
@@ -18,6 +17,8 @@
 #include "Utility.h"
 #include "HooksDebugModule.h"
 
+#include "HooksSortListStep.hpp"
+
 namespace RH = ReversibleHooks;
 namespace rng = std::ranges;
 using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
@@ -25,389 +26,6 @@ using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
 using namespace ImGui;
 
 constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
-
-#if 0
-// Clears both filters
-// Making all items visible again is done by `DoFilter`
-void HooksDebugModule::HookFilter::ClearFilters() {
-    m_NamespaceTokens.clear();
-    m_HookFilter           = {};
-    m_HookFilterByAddress  = false;
-    m_HookFilterByName     = false;
-    m_CombineFilterResults = false;
-}
-
-// Are we filtering namespaces
-bool HooksDebugModule::HookFilter::IsNamespaceFilterActive() {
-    return !m_NamespaceTokens.empty();
-}
-
-// If empty it won't filter anything
-bool HooksDebugModule::HookFilter::IsHookFilterEmpty() {
-    return m_HookFilter->empty();
-}
-
-// Check if hook filter is present.
-// even in case it's present it might be empty
-// in which case it wouldn't filter out anything.
-// Usually you want to use `IsHookFilterActive` which checks both.
-bool HooksDebugModule::HookFilter::IsHookFilterPresent() {
-    return m_HookFilter.has_value();
-}
-
-bool HooksDebugModule::HookFilter::IsHookFilterActive() {
-    return IsHookFilterPresent() && !IsHookFilterEmpty();
-}
-
-// Are either filters active
-bool HooksDebugModule::HookFilter::EitherFiltersActive() {
-    return IsNamespaceFilterActive() || IsHookFilterActive();
-}
-
-// Should the current filtered namespace be relative to the root namespace.
-// This is the case when the user prepends the namespace tokens with a `/` (NAMESPACE_SEP).
-// Eg.: `/Entity` should only show the `Entity` namespace under `Root` (But not, for example, `Audio/AEVehicleAudioEntity`)
-bool HooksDebugModule::HookFilter::IsRootRelativeNamespace() {
-    return m_NamespaceTokens.size() >= 1 && m_NamespaceTokens.front().empty();
-}
-
-void HooksDebugModule::HookFilter::SetSubCategoriesVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open) {
-    cat.Visible(visible);
-    cat.Open(open);
-    for (auto& sc : cat.SubCategories()) {
-        SetSubCategoriesVisibleAndOpen(sc, visible, open);
-    }
-}
-
-void HooksDebugModule::HookFilter::SetSubCategoriesItemsVisible(ReversibleHooks::HookCategory& cat, bool visible) {
-    cat.m_anyItemsVisible = visible;
-    for (auto& i : cat.Items()) {
-        i.SetMatchesSearchFilter(visible);
-    }
-    for (auto& sc : cat.SubCategories()) {
-        SetSubCategoriesItemsVisible(sc, visible);
-    }
-}
-
-// Returns `pair<visible, open>` of this category
-auto HooksDebugModule::HookFilter::DoFilter(ReversibleHooks::HookCategory& cat, size_t depth) -> FilterResult {
-    // Will be set to the appropriate values on return
-    cat.Visible(false);
-    cat.Open(false);
-
-    const auto hasSubCategories = !cat.SubCategories().empty();
-
-    // Process all sub-categories, and return if any category is pair<visible, open>
-    const auto ProcessSubCategories = [&] {
-        bool anyVisible{}, anyOpen{};
-        for (auto& sc : cat.SubCategories()) {
-            const auto [visible, open] = DoFilter(sc, depth + 1);;
-            anyVisible |= (sc.m_isVisible = visible);
-            anyOpen |= (sc.m_isOpen = open);
-        }
-        return FilterResult{ anyVisible, anyOpen };
-    };
-
-    // If `doFilter` argument is `false` all items are set visible,
-    // and either true (if we have hooks) or false (if `cat.Items().empty()`) is returned.
-    // Otherwise items are filtered and true if returned if at least 1 item is visible.
-    const auto ProcessItems = [&] (bool noFilter = false) {
-        if (!noFilter && IsHookFilterActive()) {
-            cat.m_anyItemsVisible = false;
-            for (auto& i : cat.Items()) {
-                auto matches = false;
-                if (m_HookFilterByName) {
-                    matches |= StringContainsString(i.GetName(), *m_HookFilter, m_IsCaseSensitive);
-                }
-                if (m_HookFilterByAddress) {
-                    const auto CheckContainsAddress = [&] (void* addr) {
-                        char buf[64]{ "0x" };
-                        const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(addr), 16);
-                        if (ec != std::errc{}) {
-                            return false;
-                        }
-                        return StringContainsString(std::string_view{ buf, end }, *m_HookFilter, false);
-                    };
-                    matches |= CheckContainsAddress(i.GetHookAddressGTA()) || CheckContainsAddress(i.GetHookAddressOur());
-                }
-                i.SetMatchesSearchFilter(matches);
-                cat.m_anyItemsVisible |= matches;
-            }
-        } else { // Otherwise make sure all items are visible (if any)
-            if (cat.Items().empty()) { // No items, make sure flag is set correctly.
-                cat.m_anyItemsVisible = false;
-            }
-            else {
-                cat.m_anyItemsVisible = true;
-                for (auto& i : cat.Items()) {
-                    i.SetMatchesSearchFilter(true);
-                }
-            }
-        }
-        return cat.m_anyItemsVisible;
-    };
-
-
-
-
-    if (!m_CombineFilterResults && !IsNamespaceFilterActive()) { // Hook filter only
-        assert(IsHookFilterActive());
-
-        // Filter by hook names only
-        // Category is visible if it:
-        // - It has visible hooks (After filtering)
-        // - Or it has visible sub-categories
-
-        const auto itemsVisible = ProcessItems(); // Filter items
-        const auto [anySubCatVisible, anySubCatOpen] = ProcessSubCategories();
-        const auto open = itemsVisible || anySubCatOpen;
-        return FilterResult{
-            .Visible = open || anySubCatVisible,
-            .Open    = open,
-        };
-#if 1
-    } 
-    const auto isPartOfNamespacePath  = depth <= m_NamespaceTokens.size() - 1;
-    const auto isAtEndOfNamespacePath = depth == m_NamespaceTokens.size() - 1;
-    const auto isLastKeepOpen         = isAtEndOfNamespacePath && m_NamespaceTokens.back().empty(); // Last token is empty, so we should keep the category open
-
-    const auto ProcessResult = [&](
-        bool isMatchNamespace,
-        bool isAnySCVisible,
-        bool isAnySCOpen
-    ) {
-        const auto isAnyItemVisible = ProcessItems(m_CombineFilterResults);
-        return FilterResult{
-            .Visible = isAnySCVisible || isMatchNamespace && isAnyItemVisible,
-            .Open    = isAnySCOpen || isAnySCVisible || isLastKeepOpen || (isMatchNamespace && !isAnyItemVisible) || (IsHookFilterPresent() && isAnyItemVisible),                           
-        };
-    };
-
-    if (IsRootRelativeNamespace()) {
-        if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
-            assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
-        } else if (isPartOfNamespacePath && !isLastKeepOpen) {
-            if (!hasSubCategories && !isAtEndOfNamespacePath || !StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive)) {
-                return {}; // If not at the end we must have more sub-categories, otherwise path wont match
-            }
-        }
-        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-        return ProcessResult(
-            true,
-            anySCVisible,
-            anySCOpen
-        );
-    } else {
-        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-                const auto ProcessFilter = [&]() -> bool {
-            if (depth < m_NamespaceTokens.size()) { // Optimization: Not enough categories to possibly staisfy all tokens
-                return false;
-            }
-            for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
-                if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
-                    return false;
-                }
-                icat = icat->Parent();
-            }
-            return true;
-        };
-        return ProcessResult(
-            anySCVisible && anySCOpen || ProcessFilter(),
-            anySCVisible,
-            anySCOpen
-        );
-    }
-#else
-    } else if (IsRootRelativeNamespace()) { // Eg.: (Notice the trailing `/`) /Entity/Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
-        // Using root namespace.
-        // In this case all tokens must match back to depth 1 (0 is root, we don't check it for match)
-        // Depth:    0       1      2   3
-        // Tokens:   <empty> Entity Ped Player
-        // No. Tok.  1       2      3   4
-
-        const auto isPartOfNamespacePath  = depth <= m_NamespaceTokens.size() - 1;
-        const auto isAtEndOfNamespacePath = depth == m_NamespaceTokens.size() - 1;
-        const auto isLastKeepOpen         = isAtEndOfNamespacePath && m_NamespaceTokens.back().empty(); // Last token is empty, so we should keep the category open
-
-        if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
-            assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
-        } else if (isPartOfNamespacePath && !isLastKeepOpen) {
-            if (!hasSubCategories && !isAtEndOfNamespacePath || !StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive)) {
-                return {}; // If not at the end we must have more sub-categories, otherwise path wont match
-            }
-        }
-
-        //const auto ProcessFilter = [&]() -> bool {
-        //    if (depth == 0) { // Special case - Root namespace depth, no need to check any tokens
-        //        assert(m_NamespaceTokens.front().empty()); // This codepath should be unreachable unless first token is empty
-        //        return true;
-        //    } else if (depth < m_NamespaceTokens.size()) {   // Not the last category to match the path?
-        //        if (   hasSubCategories                      // To match the path fully we have to have sub-categories
-        //            || depth == m_NamespaceTokens.size() - 1 // ...or it's the last token to match, in which case it's enough if this category matches
-        //            || m_NamespaceTokens.back().empty()      // ...or last token is empty (Empty strings always match everything) - This way a trailing `/` opens the category (like `::` does)
-        //        ) {
-        //            return StringContainsString(cat.Name(), m_NamespaceTokens[depth], m_IsCaseSensitive);
-        //        } else {
-        //            return false; // Not enough children to statify all tokens
-        //        }
-        //    } else { // Our parents fully matched the tokens, so we can be visible now
-        //        return true;
-        //    }
-        //};
-
-        // Open category at last depth, 
-        if (isAtEndOfNamespacePath && !IsHookFilterActive()) {
-            SetSubCategoriesVisibleAndOpen(cat, true, false);
-            SetSubCategoriesItemsVisible(cat, true);
-            (void)ProcessItems(m_CombineFilterResults);
-            return { true, isLastKeepOpen };
-        }
-
-        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-        const auto anyItemsVisible              = ProcessItems(m_CombineFilterResults); // We must run this regardless of having a filter or not
-        const auto partOfNamespacePath       = depth <= m_NamespaceTokens.size() - 1;
-        return {
-            anySCVisible || IsHookFilterActive() && anyItemsVisible,       // visible
-            anySCOpen || partOfNamespacePath // open: All categories before the bottom level should be open
-        };
-    } else { // Eg.: Ped/Player/ (Should show `Root/Entity/Ped/CPlayerPed`)
-        // Not in the root namespace
-        // All tokens should match in reverse order starting at us, eg.:
-        // Entity::Ped::Ped
-        // So, in order to be visible* `cat`s name should contain `Ped`
-        // it's parent's name should contain `Ped` and it's parent's name should contain `Entity`
-        // *We may be visible if there are subcategories visible even if this function returns false
-
-        // Example:
-        // Parents: Root-Entity-Ped-CPed
-        // Depth:   0     1       2    3   <= Also number of tokens
-        // Tokens:        Entity::Ped::Ped
-
-        const auto itemsVisible              = ProcessItems();
-
-        const auto [anySCVisible, anySCOpen] = ProcessSubCategories();
-        if (anySCVisible && anySCOpen) {
-            return {
-                anySCVisible,
-                anySCOpen
-            };
-        }
-
-        const auto ProcessFilter = [&]() -> bool {
-            if (depth < m_NamespaceTokens.size()) { // Optimization: Not enough categories to possibly staisfy all tokens
-                return false;
-            }
-
-            for (auto icat{ &cat }; auto&& token : m_NamespaceTokens | rng::views::reverse) {
-                if (!StringContainsString(icat->Name(), token, m_IsCaseSensitive)) { // Couldn't statify all tokens - Remember: `contains` always returns true if `token.empty()`
-                    return false;
-                }
-                icat = icat->Parent();
-            }
-
-            return true;
-        };
-
-        const auto catMatchesFilter = ProcessFilter();
-        return {
-            anySCVisible || (m_CombineFilterResults ? catMatchesFilter || IsHookFilterPresent() && itemsVisible : catMatchesFilter && itemsVisible), // visible
-            anySCOpen || anySCVisible || (catMatchesFilter && !itemsVisible) || (IsHookFilterPresent() && itemsVisible), // open
-        };
-    }
-#endif
-}
-
-void HooksDebugModule::HookFilter::OnInputUpdate() {
-    const std::string_view inputsv{ notsa::trim_string(m_Input) };
-
-    ClearFilters();
-
-    if (!inputsv.empty()) {
-        // If the first character is a digit, we assume the user wants to filter by address
-        // as namespace or function names can't start with a digit
-        if (DIGITS.contains(inputsv.front())) {
-            m_HookFilter          = inputsv;
-            m_HookFilterByAddress = true;
-        } else {
-            const auto namespaceSepPos = inputsv.rfind(HOOK_FILTER_SEP);
-            const auto hasNamespaceSep = namespaceSepPos != std::string_view::npos;
-
-            // First half (if any), or the whole input is the namespace filter
-            const auto namespaceStr = hasNamespaceSep
-                ? inputsv.substr(0, namespaceSepPos)
-                : inputsv;
-            if (!namespaceStr.contains(INVALID_NAMESPACE_FILTER_CHARS)) {
-                for (auto t : SplitStringView(namespaceStr, NAMESPACE_SEP)) {
-                    m_NamespaceTokens.emplace_back(notsa::trim_string(t));
-                }
-            }
-
-            // Second half (if any) or the whole input is the hook filter
-            const auto hookFilterStr = hasNamespaceSep
-                ? notsa::trim_string(inputsv.substr(namespaceSepPos + HOOK_FILTER_SEP.size()))
-                : inputsv;
-            if (hookFilterStr.find_first_of(INVALID_HOOK_FILTER_CHARS) == std::string_view::npos) {
-                m_HookFilter = hookFilterStr;
-                if (!hookFilterStr.empty()) {
-                    m_HookFilterByName    = !DIGITS.contains(hookFilterStr.front()); // Names can't start with a digit, if they do so, it might be a hex address
-                    m_HookFilterByAddress = !m_HookFilterByName || notsa::try_ston<uintptr>(hookFilterStr, 16).has_value();
-                }
-            }
-
-            // If there's no explicit separator we combine the results of both filters
-            m_CombineFilterResults = !hasNamespaceSep;
-        }
-
-        // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
-        // We have have to remove all the leading empty tokens up until the last empty one.
-        while (m_NamespaceTokens.size() >= 2 && m_NamespaceTokens[0].empty() && m_NamespaceTokens[1].empty()) {
-            m_NamespaceTokens.erase(m_NamespaceTokens.begin());
-        }
-
-        // Don't delete this please //
-        //
-        /*std::cout << "update input: ";
-        for (auto&& t : m_namespaceTokens) {
-        std::cout << '`' << t << "`,";
-        }
-        std::cout << ";" << m_hookFilter.value_or("None") << "\n";*/
-
-        // If we're using the root namespace only but there's no hook filter we practically don't filter anything
-        // Example user inputs: `/`, `/::`, `::`
-        if (IsRootRelativeNamespace() && m_NamespaceTokens.size() == 1 && IsHookFilterActive()) {
-            ClearFilters();
-        }
-    }
-
-    auto& root = RH::RHManager::GetInstance().GetRootCategory();
-    if (EitherFiltersActive()) {
-        const auto [visible, open] = DoFilter(root);
-        root.m_isVisible           = visible;
-        root.m_isOpen              = open;
-    } else {
-        SetSubCategoriesItemsVisible(root, true);          // Restore visibility of all items
-        SetSubCategoriesVisibleAndOpen(root, true, false); // Make all visible, but closed
-    }
-}
-
-void HooksDebugModule::HookFilter::Render() {
-    PushItemWidth(GetWindowContentRegionMax().x - 10.f);
-    if (InputText(" ", &m_Input)) {
-        OnInputUpdate();
-    }
-    if (IsItemHovered()) {
-        SetTooltip(
-            "`::function`         - Filters only functions \n"
-            "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
-            "`ped/player`         - Should only show Ped/CPlayerPed\n"
-            "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
-            "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
-            "For more tips see gta-reversed-modern/discussions/190\n"
-        );
-    }
-    PopItemWidth();
-}
-#endif
 
 bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
     if (m_SlideSetter.Mode == SlideSetterMode::NONE || !IsItemHovered()) {
@@ -427,6 +45,101 @@ bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
         }
     }();
     return true;
+}
+
+
+void RHDebugModule::HooksDebugModule::FilteringThread() {
+    while (!m_FilterProcessor.Exiting) {
+        std::unique_lock lock{ m_FilterProcessor.Mtx };
+        m_FilterProcessor.CV.wait(lock);
+        if (m_FilterProcessor.Exiting) {
+            break;
+        }
+        if (!m_ToRender) {
+            continue; // Nothing to filter
+        }
+        /* Hold lock until we finish */
+        NOTSA_LOG_DEBUG("Running filter");
+        const auto now = FilterClock::now();
+        HooksFilterListStep{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_ToRender);
+        HooksSortListStep{}.Process(*m_ToRender);
+        m_FilterProcessor.TimeToFinish = FilterClock::now() - now;
+        m_FilterProcessor.DidJustFinish = true;
+    }
+}
+
+bool RHDebugModule::HooksDebugModule::RunFilter() {
+    if (!m_ToRender) {
+        return false; // Nothing to filter
+    }
+    {
+        std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
+        if (!lock.owns_lock()) {
+            return false; // Filter still running
+        }
+        m_FilterProcessor.HookFilter = { m_Filter.Input, m_Filter.CaseSensitive, m_Filter.Cutoffs };
+    }
+    m_FilterProcessor.CV.notify_one();
+    return true;
+    //    if (m_FilterTask.valid() && m_FilterTask.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+    //return false; // Previous task still running, it has to finish first, because data is shared
+    //    }
+    //
+    //    m_FilterTask = std::async([this, filter = HookFilter{ m_FilterInput, m_FilterCutoffs }] mutable {
+    //#ifdef TRACY_ENABLE
+    //tracy::SetThreadName("HooksDebugModule::RunFiltering");
+    //#endif
+    //HooksFilterListStep{ std::move(filter) }.Process(*m_ToRender);
+    //HooksSortListStep{}.Process(*m_ToRender);
+    //    });
+    //
+    //    return true;
+}
+
+void RHDebugModule::HooksDebugModule::RenderFilter() {
+    notsa::ui::ScopedID idg{ "Filter" };
+
+    bool changed = false;
+
+    if (TreeNode("Filter Options")) {
+        changed |= Checkbox("Show Filter Scores", &m_Filter.ShowScores);
+        changed |= Checkbox("Case Sensitive", &m_Filter.CaseSensitive);
+        if (TreeNode("Cutoffs")) {
+            const auto CutoffSlider = [&](float* value, const char* name) {
+                changed |= SliderFloat(name, value, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+            };
+            CutoffSlider(&m_Filter.Cutoffs.Category, "Category");
+            CutoffSlider(&m_Filter.Cutoffs.CategoryGlobal, "CategoryGlobal");
+            CutoffSlider(&m_Filter.Cutoffs.ItemGlobal, "ItemGlobal");
+            CutoffSlider(&m_Filter.Cutoffs.ItemLocal, "ItemLocal");
+            CutoffSlider(&m_Filter.Cutoffs.ItemAddress, "ItemAddress");
+
+            TreePop();
+        }
+
+        TreePop();
+    }
+
+    SetNextItemWidth(-1.f);
+    changed |= InputText("##Input", &m_Filter.Input);
+    if (IsItemHovered()) {
+        SetTooltip(
+            "`::function`         - Filters only functions \n"
+            "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
+            "`ped/player`         - Should only show Ped/CPlayerPed\n"
+            "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
+            "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
+            "For more tips see gta-reversed-modern/discussions/190\n"
+        );
+    }
+    
+    if (changed) {
+        m_Filter.RunAt = FilterClock::now() + FILTER_INPUT_DEBOUNCE_TIME;
+    } else if (m_Filter.RunAt.has_value() && *m_Filter.RunAt < FilterClock::now()) {
+        if (RunFilter()) {
+            m_Filter.RunAt = std::nullopt;
+        }
+    }
 }
 
 const char* StateToString(HookState state) {
@@ -472,7 +185,7 @@ void StateButton(
         }).value_or(IM_COL32(127, 127, 0, a))
     );
 
-    SameLine(); 
+    SameLine();
     if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
         SetState(next);
     }
@@ -480,7 +193,6 @@ void StateButton(
 
     SameLine();
     TextUnformatted(title);
-
 }
 
 auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false) noexcept {
@@ -492,10 +204,45 @@ auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false)
     }
 }
 
-#if 1
-void HooksDebugModule::RenderCategoryItems(const StepsCategory& cat) {
+bool IsMatchingScoreOrNone(const std::optional<float>& score, float cutoff = 0.f) {
+    return !score.has_value() || *score > cutoff;
+}
+
+void RHDebugModule::HooksDebugModule::UpdateSlideSetterMode() {
+    m_SlideSetter.Mode = IsMouseDown(ImGuiMouseButton_Middle)
+        ? SlideSetterMode::TOGGLE
+        : IsMouseDown(ImGuiMouseButton_Right)
+            ? m_SlideSetter.Mode == SlideSetterMode::TURN_OFF || m_SlideSetter.Mode == SlideSetterMode::TURN_ON
+                ? m_SlideSetter.Mode // Technically in setter mode already
+                : SlideSetterMode::SETTER
+            : SlideSetterMode::NONE;
+
+}
+
+void RHDebugModule::HooksDebugModule::RenderMenuBar() {
+    if (ImGui::BeginMenuBar()) {
+        if (ImGui::BeginMenu("Tools")) {
+            if (ImGui::MenuItem("Export hooks.csv")) {
+                const auto path = fs::weakly_canonical("hooks.csv");
+                ReversibleHooks::RHManager::GetInstance().WriteHooksToFile(path);
+                NOTSA_LOG_INFO("Exported hooks to {:?}", path.string());
+            }
+            ImGui::EndMenu();
+        }
+        ImGui::EndMenuBar();
+    }
+}
+
+// Should acquire lock on `cat.ItemsMtx` before calling
+bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
+    if (!IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems)) {
+        return false;
+    }
     for (auto& item : cat.Items) {
-        notsa::ui::ScopedID idg{ item.Name };
+        if (!IsMatchingScoreOrNone(item.FilterScore)) {
+            continue;
+        }
+        notsa::ui::ScopedID idg{ item.Ptr->GetName() };
 
         // Draw hook symbol
         {
@@ -506,35 +253,31 @@ void HooksDebugModule::RenderCategoryItems(const StepsCategory& cat) {
         }
 
         // State checkbox
-        {
-            StateButton(
-                item.Name.c_str(),
-                item.Item->GetIsStateLocked(),
-                item.Item->GetState() == HookState::Unhooked
-                    ? ImTristate::NONE
-                    : ImTristate::ALL,
-                item.Item->GetState(),
-                item.Item->GetState() == HookState::RedirectToOurs
-                    ? HookState::RedirectToGTA
-                    : HookState::RedirectToOurs,
-                [&] (HookState s) { item.Item->SetState(s); },
-                [&] () { item.Item->SetToPreviousState(); }
-            );
-        }
+        StateButton(
+            m_Filter.ShowScores
+                ? std::format("{} (Score: {})", item.Ptr->GetName(), item.FilterScore.value_or(-1.f)).c_str()
+                : item.Ptr->GetName().c_str(),
+            item.Ptr->GetIsStateLocked(),
+            item.Ptr->GetState() == HookState::Unhooked
+                ? ImTristate::NONE
+                : ImTristate::ALL,
+            item.Ptr->GetState(),
+            item.Ptr->GetState() == HookState::RedirectToOurs
+                ? HookState::RedirectToGTA
+                : HookState::RedirectToOurs,
+            [&] (HookState s) { item.Ptr->SetState(s); },
+            [&] () { item.Ptr->SetToPreviousState(); }
+        );
 
-        if (!IsItemHovered()) {
-            continue;
-        }
-
-        const auto gta = item.Item->GetHookAddressGTA(),
-                   our = item.Item->GetHookAddressOur();
-        if (gta && our) {
+        if (IsItemHovered()) {
+            const auto gta = item.Ptr->GetHookAddressGTA(),
+                       our = item.Ptr->GetHookAddressOur();
             const auto AddrToClipboard = [](void* addr) {
                 SetClipboardText(std::format("{}", addr).c_str());
             };
 
             std::string tooltipText = std::format("SA: {} / Our: {}", gta, our);
-            if (item.Item->GetIsStateLocked()) {
+            if (item.Ptr->GetIsStateLocked()) {
                 tooltipText += "\n(locked)";
             }
             SetTooltip(tooltipText.c_str());
@@ -546,13 +289,21 @@ void HooksDebugModule::RenderCategoryItems(const StepsCategory& cat) {
             }
         }
     }
+    return true;
 }
 
-void HooksDebugModule::RenderCategory(const StepsCategory& cat) {
-    notsa::ui::ScopedID idg{ cat.Name };
+bool HooksDebugModule::RenderCategory(StepsCategory& cat) {
+    if (!IsMatchingScoreOrNone(cat.MaxFilterScore)) {
+        return false;
+    }
+
+    const auto hasItemsToShow      = cat.HasItems && IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems),
+               hasCategoriesToShow = cat.HasSubCategories && IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats);
+
+    notsa::ui::ScopedID idg{ cat.Category->Name() };
 
     const auto TreeNodeWithCheckbox = [](
-        const char*                                            label,
+        const char*                                     label,
         bool                                            disabled,
         bool                                            hasAnyUnhooked,
         ReversibleHooks::HookCategory::CommonItemsState commonState,
@@ -601,37 +352,47 @@ void HooksDebugModule::RenderCategory(const StepsCategory& cat) {
         return std::make_tuple(open, false);
     };
 
-    // Disable all hooks in category at once
-    {
-        if (cat.TotalFilterScore > 0.f) {
-            SetNextItemOpen(true);
+    // Category tree node
+    if (m_FilterProcessor.DidJustFinish) {
+        if (cat.MaxFilterScore > 0.f) {
+            SetNextItemOpen(true, ImGuiCond_Always);
         }
-
-        const auto [open, stateChanged] = TreeNodeWithCheckbox(
-            cat.Name.c_str(),
-            !cat.AnyUnlockedItems,
-            cat.AnyUnhookedItems,
-            cat.CommonStateAllItems,
-            //cat.CommonStateAllItems.value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
-            cat.CommonStateAllItems.value_or(HookState::RedirectToOurs) == HookState::RedirectToOurs
-                ? HookState::RedirectToGTA
-                : HookState::RedirectToOurs,
-            [&] (HookState s) { NOTSA_LOG_ERR("TODO"); }, // cat.SetAllItemsState(s);
-            [&] () { NOTSA_LOG_ERR("TODO"); } // cat.SetAlStepItemsToPreviousState();
-        );
-        //if (stateChanged) {
-        //    cat.ToggleAlStepItemsState();
-        //}
-        //if (bool state = cbState; HandleSlideSetterForItem(state)) {
-        //    cat.SetAlStepItemsState(state);
-        //}
-        //cat.Open(open);
     }
 
-    if (!IsItemToggledOpen()) {
-        return;
+    const auto [open, stateChanged] = TreeNodeWithCheckbox(
+        m_Filter.ShowScores
+            ? std::format(
+                  "{} Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}",
+                  cat.Category->Name(),
+                  cat.FilterScore.value_or(-1.f),
+                  cat.MaxFilterScoreOwnItems.value_or(-1.f),
+                  cat.MaxFilterScoreSubItems.value_or(-1.f),
+                  cat.MaxScoreAllItems.value_or(-1.f),
+                  cat.MaxFilterScoreSubCats.value_or(-1.f),
+                  cat.MaxFilterScore.value_or(-1.f)
+              ).c_str()
+            : cat.Category->Name().c_str(),
+        !cat.AnyUnlockedItems,
+        cat.AnyUnhookedItems,
+        cat.CommonStateAllItems,
+        //cat.CommonStateAllItems.value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+        cat.CommonStateAllItems.value_or(HookState::RedirectToOurs) == HookState::RedirectToOurs
+            ? HookState::RedirectToGTA
+            : HookState::RedirectToOurs,
+        [&] (HookState s) { NOTSA_LOG_ERR("TODO"); }, // cat.SetAllItemsState(s);
+        [&] () { NOTSA_LOG_ERR("TODO"); } // cat.SetAlStepItemsToPreviousState();
+    );
+    if (!open) {
+        return true;
     }
-
+    //if (stateChanged) {
+    //    cat.ToggleAlStepItemsState();
+    //}
+    //if (bool state = cbState; HandleSlideSetterForItem(state)) {
+    //    cat.SetAlStepItemsState(state);
+    //}
+    //cat.Open(open);
+    
     //if (!cat.Open()) {
     //    return;
     //}
@@ -641,10 +402,13 @@ void HooksDebugModule::RenderCategory(const StepsCategory& cat) {
     //
 
     // Draw hooks (items) (if any)
-    if (!cat.Items.IsEmpty()) {
-        if (cat.SubCategories.IsEmpty()) { // If there are no subcategories we can draw all items directly
-            RenderCategoryItems(cat);
-        } else { // Otherwise use a tree node + checkbox for them
+    if (hasItemsToShow) {
+        if (hasCategoriesToShow) { // Render a separate tree node that's like a category for the items
+            if (m_FilterProcessor.DidJustFinish) {
+                if (cat.MaxFilterScoreOwnItems > 0.f) {
+                    SetNextItemOpen(true, ImGuiCond_Always);
+                }
+            }
             NOTSA_LOG_ERR("TODO");
             //const auto [open, stateChanged] = TreeNodeWithCheckbox(
             //    "Hooks",
@@ -668,70 +432,75 @@ void HooksDebugModule::RenderCategory(const StepsCategory& cat) {
             //    RenderCategoryItems(cat);
             //    TreePop();
             //}
+        } else { // If there are no subcategories we can draw all items directly under this node
+            RenderCategoryItems(cat);
+        }
+    }
+    
+
+    // Draw subcategories
+    if (hasCategoriesToShow) {
+        for (auto& v : cat.Categories) {
+            RenderCategory(v);
         }
     }
 
-    // Draw subcategories
-    for (auto& v : cat.SubCategories) {
-        RenderCategory(v);
-    }
-
     TreePop();
+
+    return true;
 }
-#endif
+
+const char* RHDebugModule::HooksDebugModule::GetWindowTitle() noexcept {
+    m_WindowTitle.clear();
+    const auto Append = [&](std::string_view fmt, auto&&... args) {
+        std::vformat_to(std::back_inserter(m_WindowTitle), fmt, std::make_format_args(args...));
+    };
+    Append("ReversibleHooks (TM) (R)");
+    std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
+    if (lock.owns_lock()) {
+        Append(" - [Filtering: {} ms]", std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.TimeToFinish));
+    } else {
+        Append(" - [Status: Filtering...]");
+    }
+    Append("###ReversibleHooks"); // Keeps ID the same, as window title is used for it otherwise
+    return m_WindowTitle.c_str();
+}
+
+RHDebugModule::HooksDebugModule::HooksDebugModule() :
+    m_FilterProcessor{ .Thread{ [this] { FilteringThread(); } } }
+{}
+
+RHDebugModule::HooksDebugModule::~HooksDebugModule() {
+    m_FilterProcessor.Exiting = true;
+    m_FilterProcessor.CV.notify_one();
+    m_FilterProcessor.Thread.join();
+}
 
 void HooksDebugModule::RenderWindow() {
-    const notsa::ui::ScopedWindow window{ "ReversibleHooks (TM) (R)", {500.f, 700.f}, m_IsOpen, ImGuiWindowFlags_MenuBar };
+    const notsa::ui::ScopedWindow window{ GetWindowTitle(), {500.f, 700.f}, m_IsOpen, ImGuiWindowFlags_MenuBar};
     if (!m_IsOpen) {
         return;
     }
 
-    m_Processor.PushSteps(HooksListStepsPtr{ new HooksListSteps{
-        .BuildStep{ RH::RHManager::GetInstance().GetRootCategory() },
-        .FilterStep{ m_FilterInput }
-    } });
-    const auto processed = m_Processor.GetResult();
-    if (!processed) {
-        return;
+    if (!m_ToRender) {
+        m_ToRender = m_Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
     }
 
-    if (ImGui::BeginMenuBar()) {
-        if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Export hooks.csv")) {
-                const auto path = fs::weakly_canonical("hooks.csv");
-                ReversibleHooks::RHManager::GetInstance().WriteHooksToFile(path);
-                NOTSA_LOG_INFO("Exported hooks to {:?}", path.string());
+    UpdateSlideSetterMode();
+
+    RenderMenuBar();
+    RenderFilter();
+    {
+        std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
+        if (lock.owns_lock()) {
+            if (!RenderCategory(*m_ToRender)) {
+                notsa::ui::WindowCenteredTextUnformatted("No filter results");
             }
-            ImGui::EndMenu();
+            m_FilterProcessor.DidJustFinish = false;
+        } else {
+            notsa::ui::WindowCenteredTextUnformatted("Filtering in progress...");
         }
-        ImGui::EndMenuBar();
     }
-
-    PushItemWidth(GetWindowContentRegionMax().x - 10.f);
-    InputText(" ", &m_FilterInput);
-    if (IsItemHovered()) {
-        SetTooltip(
-            "`::function`         - Filters only functions \n"
-            "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
-            "`ped/player`         - Should only show Ped/CPlayerPed\n"
-            "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
-            "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
-            "For more tips see gta-reversed-modern/discussions/190\n"
-        );
-    }
-    PopItemWidth();
-
-    m_SlideSetter.Mode = IsMouseDown(ImGuiMouseButton_Middle)
-        ? SlideSetterMode::TOGGLE
-        : IsMouseDown(ImGuiMouseButton_Right)
-            ? m_SlideSetter.Mode == SlideSetterMode::TURN_OFF || m_SlideSetter.Mode == SlideSetterMode::TURN_ON
-                ? m_SlideSetter.Mode // Technically in setter mode already
-                : SlideSetterMode::SETTER
-            : SlideSetterMode::NONE;
-
-
-    //m_HookFilter.Render();
-    //RenderCategory(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
 }
 
 void HooksDebugModule::RenderMenuEntry() {

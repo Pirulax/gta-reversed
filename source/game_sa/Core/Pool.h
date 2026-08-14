@@ -111,7 +111,7 @@ public:
     */
     void Flush() {
         // notsa: Call destructors for all valid objects
-        DestroyObjects();
+        //DestroyObjects();
 
         // Fill in memory so dangling pointers are more obvious
         DoFill(NOMANSLAND_FILL);

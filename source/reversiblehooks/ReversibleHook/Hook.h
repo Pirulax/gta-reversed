@@ -23,7 +23,7 @@ public:
     const auto& Name() const noexcept { return m_Name; }
 
 protected:
-    std::string m_Name{}; //!< Name of hook, ex.: `Add` (Referring to CEntity::Add)
+    const std::string m_Name{}; //!< Name of hook, ex.: `Add` (Referring to CEntity::Add)
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks

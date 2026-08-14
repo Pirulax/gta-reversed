@@ -1,36 +1,30 @@
 #pragma once
 
+#include <optional>
+
 #include "HookFilter.h"
 #include "HookStepsDefs.h"
 
 namespace RHDebugModule {
 class HooksFilterListStep {
 public:
-    HooksFilterListStep(std::string_view filter) :
-        m_Filter{ filter } {
+    HooksFilterListStep(HookFilter filter) :
+        m_Filter{ std::move(filter) } {
     }
 
-    StepsCategory* Process(StepsCategory* list) const noexcept;
+    void Process(StepsCategory& root) const noexcept;
 
 private:
-    /*!
-     * @brief
-     */
-    bool ProcessCategorySimpleGlobalFilter(StepsCategory& cat) const noexcept;
+    float CalculateCategoryScoresByName(StepsCategory& cat) const noexcept;
 
-    /*!
-     * @brief Filters category's items and subcategories in-place
-     * @returns If the category has any items or subcategories that match the filter
-     */
-    auto ProcessCategory(StepsCategory& from, HookFilter::NamespaceTokens& nmspace, size_t depth = 0) const noexcept;
+    float CalculateCategoryScoresByPath(StepsCategory& cat) const noexcept;
+    float CalculateCategoryScoresByPath(StepsCategory& cat, HookFilter::NamespaceTokens& ns, size_t depth = 0) const noexcept;
+    void  SetCategoryUnfilteredCategoryScores(StepsCategory& cat) const noexcept;
 
-    bool ProcessCategoryHookFilterOnly(StepsCategory& from) const noexcept;
+    std::optional<float> CalculateCategoryItemsScore(StepsCategory& cat, bool onlyIfCategoryHasScore) const noexcept;
+    void                 SetCategoryUnfilteredItemsScore(StepsCategory& from) const noexcept;
 
-    /*!
-     * @brief Filters category's items in-place
-     * @returns If the category has any items that match the filter
-     */
-    bool ProcessItems(StepsCategory& cat, bool noFilter = false) const noexcept;
+    void CalculateCategoryMaxScores(StepsCategory& cat) const noexcept;
 
 private:
     HookFilter m_Filter;

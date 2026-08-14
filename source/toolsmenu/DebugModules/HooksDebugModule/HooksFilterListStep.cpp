@@ -3,116 +3,117 @@
 #include "HooksFilterListStep.h"
 
 namespace RHDebugModule {
-//auto HooksFilterListStep::ProcessCategory(
-//    StepsCategory& cat,
-//    const HookFilter&              filter,
-//    NamespaceTokens&                 path,
-//    size_t                         depth
-//) noexcept {
-//    // Update current path
-//    path.emplace_back(cat.Name);
-//    const notsa::ScopeGuard pg{ [&path]() {
-//        path.pop_back();
-//    } };
-//
-//    // Check if current category matches filter
-//    cat.FilterScore           = m_Filter.MatchCategoryByNamespace(cat.Name, depth);
-//    const auto isThisMatching = cat.FilterScore.has_value();
-//
-//    const auto ProcessSubCategories = [&, this]() {
-//        auto cats = std::move(cat.SubCategories);
-//        for (auto& sc : cats) {
-//            if (ProcessCategory(sc, filter, path, depth + 1, isThisMatching)) {
-//                cat.SubCategories.AddItem(&sc);
-//            }
-//        }
-//        return !cat.SubCategories.IsEmpty();
-//    };
-//
-//    // When combining results it's enough if:
-//    // - Either we have items that match the hook filter
-//    // - We have sub-categories that match the namespace filter or have items that match the hook filter
-//    if (m_Filter.ShouldCombineFilterResults() && m_Filter.IsHookFilterActive() && m_Filter.IsNamespaceFilterActive()) {
-//        const auto hasMatchingItems         = ProcessItems(cat, filter);
-//        const auto hasMatchingSubCategories = ProcessSubCategories();
-//        return hasMatchingSubCategories || isThisMatching && hasMatchingItems;
-//    }
-//
-//    // In root-relative namespace mode the current path has to match up all the way, if not, we stop
-//    if (m_Filter.IsRootRelativeNamespace() && !isThisMatching) {
-//        return false;
-//    }
-//
-//    // Otherwise if the filter matches then we show the category
-//    const auto hasMatchingItems         = ProcessItems(cat, filter) && m_Filter.IsHookFilterActive();
-//    const auto hasMatchingSubCategories = ProcessSubCategories();
-//    return hasMatchingItems || hasMatchingSubCategories || isThisMatching && isParentMatching;
-//}
+void HooksFilterListStep::Process(StepsCategory& root) const noexcept {
+    ZoneScoped;
 
-StepsCategory* HooksFilterListStep::Process(StepsCategory* list) const noexcept {
-    if (m_Filter.IsSimpleGlobalSearch()) {
-        ProcessCategorySimpleGlobalFilter(*list);
-    } else if (m_Filter.IsHookFilterActive() && !m_Filter.IsNamespaceFilterActive()) {
-        ProcessCategoryHookFilterOnly(*list);
+    // NB: Always run category filtering first, because item filtering depends on category scores to determine if it should filter items or not
+    if (m_Filter.IsFilteringByCategoryPath()) {
+        CalculateCategoryScoresByPath(root);
+    } else if (m_Filter.IsFilteringByCategoryName()) {
+        CalculateCategoryScoresByName(root);
     } else {
-        NOTSA_LOG_ERR("TODO");
-    }
-    return list;
-}
-
-bool HooksFilterListStep::ProcessCategorySimpleGlobalFilter(StepsCategory& cat) const noexcept {
-    // Match category by name
-    cat.FilterScore = m_Filter.MatchCategoryByName(cat.Name);
-
-    // Always process items, but only filter if the category itself doesn't match the filter (otherwise we want to show kep items)
-    const auto isCategoryMatching = cat.FilterScore != 0.f;
-    const auto hasItemsMatching   = ProcessItems(cat, isCategoryMatching);
-
-    // Also process sub-categories, and calculate total score for them
-    if (!cat.SubCategories.IsEmpty()) {
-        cat.SubCategories.Filter([this](auto& sc) {
-            return ProcessCategorySimpleGlobalFilter(sc);
-        });
-        cat.TotalFilterScore = rng::fold_left(cat.SubCategories, cat.FilterScore + cat.TotalFilterScoreOurItems, [](float sum, const auto& sc) {
-            return sum + sc.TotalFilterScore;
-        });
+        SetCategoryUnfilteredCategoryScores(root);
     }
 
-    // If we have any items (including those of sub-categories) that match the filter, keep the category
-    return isCategoryMatching || hasItemsMatching || !cat.SubCategories.IsEmpty();
-}
-
-bool HooksFilterListStep::ProcessCategoryHookFilterOnly(StepsCategory& of) const noexcept {
-    const auto hasItemsMatching = ProcessItems(of);
-    of.SubCategories.Filter([this](auto& c) {
-        return ProcessCategoryHookFilterOnly(c);
-    });
-    return hasItemsMatching || !of.SubCategories.IsEmpty();
-}
-
-bool HooksFilterListStep::ProcessItems(StepsCategory& cat, bool noFilter) const noexcept {
+    // NB: Always run item filtering after category (See above why)
     if (m_Filter.IsHookFilterActive()) {
-        const auto DoMatch = [this](auto& i) {
-            const auto score = i.FilterScore = m_Filter.MatchItem(
-                i.Name.c_str(),
-                i.Item->GetHookAddressGTA(),
-                i.Item->GetHookAddressOur()
-            );
-            return score;
-        };
-        if (noFilter) {
-            for (auto& i : cat.Items) {
-                DoMatch(i);
-            }
-        } else {
-            cat.Items.Filter([&DoMatch](auto& i) {
-                return DoMatch(i) != 0.f;
-            });
-        }
-        cat.TotalFilterScoreOurItems = rng::fold_left(cat.Items, 0.0f, [](float sum, const auto& i) {
-            return sum + i.FilterScore;
-        });
+        CalculateCategoryItemsScore(root, m_Filter.IsFilteringByCategory() && !m_Filter.IsSimpleFilterString());
+    } else {
+        SetCategoryUnfilteredItemsScore(root);
     }
-    return !cat.Items.IsEmpty();
+
+    // After all this we can calculate the total scores
+    CalculateCategoryMaxScores(root);
+}
+
+float HooksFilterListStep::CalculateCategoryScoresByName(StepsCategory& cat) const noexcept {
+    cat.FilterScore           = m_Filter.MatchCategoryByName(cat.Category->Name());
+    cat.MaxFilterScoreSubCats = std::nullopt;
+    for (auto& sc : cat.Categories) {
+        cat.MaxFilterScoreSubCats = std::max(cat.MaxFilterScoreSubCats.value_or(0.f), CalculateCategoryScoresByName(sc));
+    }
+    return std::max(cat.MaxFilterScoreSubCats.value_or(0.f), *cat.FilterScore);
+}
+
+float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, HookFilter::NamespaceTokens& ns, size_t depth) const noexcept {
+    cat.FilterScore           = m_Filter.MatchCategoryByNamespace(ns, depth);
+    cat.MaxFilterScoreSubCats = std::nullopt;
+
+    if (m_Filter.IsRootRelativeNamespace()) {
+        if (cat.FilterScore <= 0.f) {
+            return 0.f; // If we didn't match neither will any of our sub-categories, so we can just stop here
+        }
+    }
+
+    for (auto& sc : cat.Categories) {
+        ns.push_back(sc.Category->Name());
+        cat.MaxFilterScoreSubCats = std::max(cat.MaxFilterScoreSubCats.value_or(0.f), CalculateCategoryScoresByPath(sc, ns, depth + 1));
+        ns.pop_back();
+    }
+
+    return std::max(cat.MaxFilterScoreSubCats.value_or(0.f), *cat.FilterScore);
+}
+
+float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat) const noexcept {
+    HookFilter::NamespaceTokens ns = { cat.Category->Name() };
+    return CalculateCategoryScoresByPath(cat, ns, 0);
+}
+
+void HooksFilterListStep::SetCategoryUnfilteredCategoryScores(StepsCategory& cat) const noexcept {
+    cat.FilterScore           = std::nullopt;
+    cat.MaxFilterScoreSubCats = std::nullopt;
+    for (auto& sc : cat.Categories) {
+        SetCategoryUnfilteredCategoryScores(sc);
+    }
+}
+
+std::optional<float> HooksFilterListStep::CalculateCategoryItemsScore(StepsCategory& cat, bool onlyIfCategoryHasScore) const noexcept {
+    // NB: For this to work properly category scores must first be calculated!
+    if (onlyIfCategoryHasScore != (std::max(cat.MaxFilterScoreSubCats, cat.FilterScore) > 0.f)) {
+        SetCategoryUnfilteredItemsScore(cat);
+        return std::nullopt;
+    }
+
+    if (cat.HasItems) {
+        cat.MaxFilterScoreOwnItems = 0.f;
+        for (auto& i : cat.Items) {
+            const auto score = m_Filter.MatchItem(
+                i.Ptr->GetName(),
+                i.Ptr->GetHookAddressGTA(),
+                i.Ptr->GetHookAddressOur()
+            );
+            i.FilterScore = score;
+            cat.MaxFilterScoreOwnItems = std::max(*cat.MaxFilterScoreOwnItems, score);
+        }
+    } else {
+        cat.MaxFilterScoreOwnItems = std::nullopt;
+    }
+
+    cat.MaxFilterScoreSubItems = std::nullopt;
+    for (auto& sc : cat.Categories) {
+        cat.MaxFilterScoreSubItems = std::max(cat.MaxFilterScoreSubItems, CalculateCategoryItemsScore(sc, onlyIfCategoryHasScore));
+    }
+
+    cat.MaxScoreAllItems = std::max(cat.MaxFilterScoreSubItems, cat.MaxFilterScoreOwnItems);
+
+    return cat.MaxScoreAllItems;
+}
+
+void HooksFilterListStep::SetCategoryUnfilteredItemsScore(StepsCategory& cat) const noexcept {
+    cat.MaxFilterScoreOwnItems = std::nullopt;
+    cat.MaxFilterScoreSubItems = std::nullopt;
+    cat.MaxScoreAllItems       = std::nullopt;
+    for (auto& i : cat.Items) {
+        i.FilterScore = std::nullopt;
+    }
+    for (auto& sc : cat.Categories) {
+        SetCategoryUnfilteredItemsScore(sc);
+    }
+}
+void HooksFilterListStep::CalculateCategoryMaxScores(StepsCategory& cat) const noexcept {
+    cat.MaxFilterScore = std::max(cat.MaxFilterScoreSubCats, cat.MaxScoreAllItems);
+    for (auto& sc : cat.Categories) {
+        CalculateCategoryMaxScores(sc);
+    }
 }
 }; // namespace RHDebugModule

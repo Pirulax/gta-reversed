@@ -5,22 +5,16 @@
 
 namespace RHDebugModule {
 HooksBuildListStep::HooksBuildListStep(
-    std::shared_ptr<ReversibleHooks::HookCategory> cat,
     size_t maxItems,
     size_t maxCategories
 ) :
     m_PoolItem{ maxItems },
     m_PooStepCategory{ maxCategories }
 {
-    m_Result = ConstructList(std::move(cat));
 }
 
 StepsCategory* HooksBuildListStep::ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> cat) noexcept {
     ZoneScoped;
-
-    StepsCategory* out = new (m_PooStepCategory.New()) StepsCategory{
-        .Name{ cat->Name() }
-    };
 
     const auto GetCommonState = [](CommonState base, CommonState other) -> CommonState {
         return base == other
@@ -28,29 +22,34 @@ StepsCategory* HooksBuildListStep::ConstructList(std::shared_ptr<ReversibleHooks
             : std::nullopt;
     };
 
-    out->HasItems = !cat->Items().empty();
+    StepsCategory* out = new (m_PooStepCategory.New()) StepsCategory{
+        .Category{ std::move(cat) },
+    };
+
+    out->HasItems = !out->Category->Items().empty();
     if (out->HasItems) {
-        out->CommonStateOwnItems = cat->Items().front()->GetState();
-        for (auto item : cat->Items()) {
+        ZoneScoped;
+        out->CommonStateOwnItems = out->Category->Items().front()->GetState();
+        for (auto item : out->Category->Items()) {
             out->CommonStateOwnItems = GetCommonState(out->CommonStateOwnItems, item->GetState());
             out->AnyUnhookedItems |= item->GetState() == HookState::Unhooked;
             out->AnyUnlockedItems |= !item->GetIsStateLocked();
             out->Items.AppendItem(
                 new (m_PoolItem.New()) StepsItem{
-                    .Name{ item->GetName() },
-                    .Item{ std::move(item) },
+                    .Ptr{ std::move(item) },
                 }
             );
         }
     }
 
-    out->HasSubCategories = !cat->SubCategories().empty();
+    out->HasSubCategories = !out->Category->SubCategories().empty();
     if (out->HasSubCategories) {
-        for (auto v : cat->SubCategories()) {
+        ZoneScoped;
+        for (auto v : out->Category->SubCategories()) {
             if (!v->SubCategories().empty() && !v->Items().empty()) {
                 continue; // Couldn't calculate common state, and also no sense to show empty categories in the UI
             }
-            auto* const sc = out->SubCategories.AppendItem(
+            auto* const sc = out->Categories.AppendItem(
                 ConstructList(std::move(v))
             );
             out->AnyUnhookedItems |= sc->AnyUnhookedItems;

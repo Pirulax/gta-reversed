@@ -211,6 +211,7 @@ void DebugModules::DoDeserializeModules() {
         // Now deserialize... We handle exceptions too, because otherwise we get a weird crash in a dll we don't have pdb's for????
         try {
             m->Deserialize(*s);
+            m->OnDeserialized();
         } catch ([[maybe_unused]] const json::exception& e) {
             NOTSA_LOG_ERR("JSON exception occurred while deserializing module `{}`: {}", id, e.what());
         }

@@ -1,7 +1,5 @@
 #include "StdInc.h"
 
-#include <Tracy.hpp>
-
 #include "app_game.h"
 #include "LoadingScreen.h"
 #include "PlantMgr.h"

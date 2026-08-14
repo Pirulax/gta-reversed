@@ -2,7 +2,7 @@
 
 #include <Base.h>
 
-#include <utility>
+#include <atomic>
 
 #include "Enums/HookMode.h"
 #include "Enums/HookType.h"
@@ -34,7 +34,7 @@ public:
         return true;
     }
 
-    auto State() const noexcept { return m_State; }
+    auto State() const noexcept { return m_State.load(); }
 
 protected:
     /*!
@@ -45,8 +45,7 @@ protected:
     virtual void ApplyNewState(StateType state, StateType oldState) = 0;
 
 protected:
-    StateType m_State{}; //!< Current state of the hook
+    std::atomic<StateType> m_State{}; //!< Really only atomic so that when filtering in the separate UI filter thread we don't get a random value
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
-

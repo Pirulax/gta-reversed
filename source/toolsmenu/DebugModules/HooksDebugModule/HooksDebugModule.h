@@ -1,6 +1,8 @@
 #pragma once
 
 #include <thread>
+#include <chrono>
+#include <future>
 #include <string>
 #include <string_view>
 
@@ -14,6 +16,10 @@ class HookCategory;
 
 namespace RHDebugModule {
 class HooksDebugModule final : public DebugModule {
+    using FilterClock = std::chrono::steady_clock;
+
+    static constexpr auto FILTER_INPUT_DEBOUNCE_TIME = std::chrono::milliseconds{ 50 };
+
     enum class SlideSetterMode {
         NONE,
         SETTER, // This mode turns into either `TURN_OFF` OR `TURN_ON` as soon as it's possible
@@ -22,89 +28,59 @@ class HooksDebugModule final : public DebugModule {
         TOGGLE
     };
 
-private:
-    class HookFilter {
-        static constexpr std::string_view NAMESPACE_SEP{ "/" };
-        static constexpr std::string_view INVALID_NAMESPACE_FILTER_CHARS{ "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the namespace filter
-
-        static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
-        static constexpr std::string_view DIGITS{ "0123456789" };
-        static constexpr std::string_view INVALID_HOOK_FILTER_CHARS{ "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the hook filter
-
-    public:
-        void Render();
-
-        //friend void from_json(const json& j, HookFilter& m) { j.at("m_Input").get_to(m.m_Input); m.OnInputUpdate(); }
-        //NLOHMANN_DEFINE_TYPE_INTRUSIVE_ONLY_SERIALIZE(HookFilter, m_Input, m_IsCaseSensitive);
-
-    private:
-        void ClearFilters();
-        bool IsNamespaceFilterActive();
-        bool IsHookFilterEmpty();
-        bool IsHookFilterPresent();
-        bool IsHookFilterActive();
-        bool EitherFiltersActive();
-        bool IsRootRelativeNamespace();
-        void SetSubCategoriesVisibleAndOpen(ReversibleHooks::HookCategory& cat, bool visible, bool open);
-        void SetSubCategoriesItemsVisible(ReversibleHooks::HookCategory& cat, bool visible);
-
-        struct FilterResult {
-            bool Visible{};
-            bool Open{};
-        };
-        auto DoFilter(ReversibleHooks::HookCategory& cat, size_t depth = 0) -> FilterResult;
-        void OnInputUpdate();
-
-    private:
-        //! Used as char buffer for the ImGUI input
-        std::string m_Input{};
-
-        //! Are the string checks case sensitive?
-        //! It is used, but there's no GUI to change it for now. It is case-insensitive by default (false).
-        bool m_IsCaseSensitive{};
-
-        //! Contains all the tokens on the left side split by `NAMESPACE_SEP` of the input split by `HOOKNAME_SEP`
-        //! Eg `m_input` => content:
-        //! - `Name/Space/` => `Name`, `Space`, `` (<= empty string)
-        //! - `Name/Space/::` => -||- (Same as the above example)
-        //! - `/` - `` (empty string) - Indicates root namespace (See `IsRelativeToRootNamespace`)
-        //! - `///` - 4 empty strings
-        std::vector<std::string_view> m_NamespaceTokens{};
-
-        //! If the 2 filter's results should be combined
-        bool m_CombineFilterResults{};
-
-        //! Filter of hook name or/and address (in hex form)
-        //! If `nullopt` means there was no `::` (HOOK_FILTER_SEP) in the user input
-        //! otherwise if there was, it contains whatever was after it (Which might be nothing - So the string is empty)
-        std::optional<std::string_view> m_HookFilter{};
-
-        //! If `m_HookFilter` is address-like (can be converted to a number from hex, with or without 0x prefix) and should be used to filter by address (as well)
-        bool m_HookFilterByAddress{};
-
-        //! If `m_HookFilter` should be used to filter by name (as well)
-        bool m_HookFilterByName{};
-    };
-
 public:
+    HooksDebugModule();
+    ~HooksDebugModule();
+
     void RenderWindow() override final;
     void RenderMenuEntry() override final;
+    void OnDeserialized() override final { RunFilter(); }
 
-    NOTSA_IMPLEMENT_DEBUG_MODULE_SERIALIZATION(HooksDebugModule, m_IsOpen, m_FilterInput);
+    NOTSA_IMPLEMENT_DEBUG_MODULE_SERIALIZATION(HooksDebugModule, m_IsOpen, m_Filter);
 
 private:
-    void RenderCategoryItems(const StepsCategory& cat);
-    void RenderCategory(const StepsCategory& cat);
     bool HandleSlideSetterForItem(bool& inOutState); // Returns if state changed
+    void UpdateSlideSetterMode();
+    void FilteringThread();
+    bool RunFilter();
+
+    const char* GetWindowTitle() noexcept;
+
+    void RenderFilter();
+    void RenderMenuBar();
+    bool RenderCategoryItems(StepsCategory& cat);
+    bool RenderCategory(StepsCategory& cat);
 
 private:
-    std::string m_FilterInput{};
     bool m_IsOpen{};
+
+    struct {
+        FilterClock::duration     TimeToFinish{};
+        std::thread               Thread;
+        std::mutex                Mtx{};
+        std::condition_variable   CV{};
+        bool                      Exiting{};
+        HookFilter                HookFilter{};
+        bool                      DidJustFinish{};
+    } m_FilterProcessor{};
+
+    struct FilterOptions {
+        std::optional<FilterClock::time_point> RunAt{};
+        std::string                            Input{};
+        HookFilter::Cutoffs                    Cutoffs{};
+        bool                                   ShowScores{};
+        bool                                   CaseSensitive{};
+
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(FilterOptions, Input, Cutoffs, ShowScores, CaseSensitive);
+    } m_Filter;
+
     struct {
         SlideSetterMode Mode;
     } m_SlideSetter{};
-    HookFilter m_HookFilter{};
-    HooksProcessingThread m_Processor{};
+
+    StepsCategory*     m_ToRender{}; //!< Data owned by `m_Builder`. Accessed/modified by the filtering thread, so must be protected by `m_FilterProcessor.Mtx` when accessed from the main thread.
+    HooksBuildListStep m_Builder{};
+    std::string        m_WindowTitle{};
 };
 }; // namespace RHDebugModule
 using HooksDebugModule = RHDebugModule::HooksDebugModule;

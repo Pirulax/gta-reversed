@@ -112,6 +112,7 @@ add_dependency(
     libjpeg-turbo
     SDL3
     boost
+    rapidfuzz
 )
 
 target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
@@ -129,6 +130,7 @@ target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
     d3d9
     SDL3::SDL3
     boost::boost
+    rapidfuzz::rapidfuzz
 )
 
 
