@@ -14,26 +14,28 @@
 class HookFilter {
     using StaticString = boost::static_string<512>;
 
+    static constexpr const char*      WILDCARD_CHAR = "*";
+
     static constexpr std::string_view NAMESPACE_SEP{ "/" };
-    static constexpr std::string_view INVALID_CAT_PATH_CHARS{ "!\"#$%&'()*+,-.:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the namespace filter
+    static constexpr std::string_view INVALID_CAT_PATH_CHARS{ "!\"#$%&'()+,-.:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the namespace filter
 
     static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
     static constexpr std::string_view DIGITS{ "0123456789" };
-    static constexpr std::string_view INVALID_HOOK_FILTER_CHARS{ "!\"#$%&'()*+,-./:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the hook filter
+    static constexpr std::string_view INVALID_HOOK_FILTER_CHARS{ "!\"#$%&'()+,-./:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the hook filter
 
     using CachedRapidfuzz = rapidfuzz::CachedLevenshtein<char>;
 
 public:
-    using NamespaceTokens = boost::container::static_vector<std::string_view, 32>;
+    using NamespaceTokens = std::vector<std::string_view>;//boost::container::static_vector<std::string_view, 32>;
 
     struct Cutoffs {
-        float Category{ 0.5f };
+        float CategoryInPath{ 0.5f };
         float CategoryGlobal{ 0.5f };
         float ItemGlobal{ 0.5f };
         float ItemLocal{ 0.1f };
         float ItemAddress{ 0.7f };
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Cutoffs, Category, CategoryGlobal, ItemGlobal, ItemLocal, ItemAddress)
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(Cutoffs, CategoryInPath, CategoryGlobal, ItemGlobal, ItemLocal, ItemAddress)
     };
 
 public:
@@ -108,7 +110,8 @@ private:
         std::string_view haystack,
         std::string_view needle,
         float            cutoff = 1.f,
-        bool             caseSensitive = false
+        bool             caseSensitive = false,
+        bool             emptyHaystackMatchesAll = false
     ) const noexcept;
 
 private:

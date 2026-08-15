@@ -140,6 +140,7 @@ bool IsForegroundApp() {
 
 // Code from winmain, 0x748DCF
 bool ProcessGameLogic(INT nCmdShow) {
+    ZoneScoped;
     if (RsGlobal.quit || FrontEndMenuManager.m_bStartGameLoading) {
         return false;
     }
@@ -167,11 +168,11 @@ bool ProcessGameLogic(INT nCmdShow) {
         return true;
     }
 
-    FrameMark;
-
     // TODO: Move this out from here (It's not platform specific at all)
     switch (gGameState) {
     case GAME_STATE_INITIAL: {
+        ZoneScopedN("INITIAL");
+
         const auto ProcessSplash = [](eLoadingLogo id) {
             CLoadingScreen::LoadSplashes(true, id);
             CLoadingScreen::Init(true, true);
@@ -189,6 +190,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         break;
     }
     case GAME_STATE_LOGO: {
+        ZoneScopedN("LOGO");
+
         if (!g_FastLoaderConfig.NoLogo) {
             if (!Windowed) {
                 VideoPlayer::Play(nCmdShow, "movies\\Logo.mpg");
@@ -199,6 +202,8 @@ bool ProcessGameLogic(INT nCmdShow) {
     }
     case GAME_STATE_PLAYING_LOGO:
     case GAME_STATE_PLAYING_INTRO: { // 0x748B17
+        ZoneScopedN("PLAYING_LOGO & PLAYING_INTRO");
+
         CPad::UpdatePads();
         auto* pad = CPad::GetPad();
         if (   Windowed
@@ -221,6 +226,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         break;
     }
     case GAME_STATE_TITLE: {
+        ZoneScopedN("TITLE");
+
         if (!g_FastLoaderConfig.NoTitleOrIntro) {
             VideoPlayer::Shutdown();
             VideoPlayer::Play(nCmdShow, FrontEndMenuManager.GetMovieFileName());
@@ -229,6 +236,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         break;
     }
     case GAME_STATE_FRONTEND_LOADING: {
+        ZoneScopedN("FRONTEND_LOADING");
+
         VideoPlayer::Shutdown();
         CLoadingScreen::Init(true, false);
         if (!g_FastLoaderConfig.NoCopyright) {
@@ -248,6 +257,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         break;
     }
     case GAME_STATE_FRONTEND_LOADED: {
+        ZoneScopedN("FRONTEND_LOADED");
+
         FrontEndMenuManager.m_bActivateMenuNextFrame = true;
         FrontEndMenuManager.m_bMainMenuSwitch = true;
         if (IsVMNotSelected) {
@@ -263,6 +274,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         break;
     }
     case GAME_STATE_FRONTEND_IDLE: { // 0x748CB2
+        ZoneScopedN("FRONTEND_IDLE");
+
         WINDOWPLACEMENT wndpl{ .length = sizeof(WINDOWPLACEMENT) };
         VERIFY(GetWindowPlacement(PSGLOBAL(window), &wndpl));
         if (g_FastLoaderConfig.ShouldLoadSaveGame()) {
@@ -284,6 +297,8 @@ bool ProcessGameLogic(INT nCmdShow) {
         NOTSA_SWCFALLTHRU; // Fall down and start loading
     }
     case GAME_STATE_LOADING_STARTED: {
+        ZoneScopedN("LOADING_STARTED");
+
         if (!g_FastLoaderConfig.NoLoadingTune) {
             AudioEngine.StartLoadingTune();
         }
@@ -296,9 +311,12 @@ bool ProcessGameLogic(INT nCmdShow) {
 
         break;
     }
-    case GAME_STATE_IDLE: {
-        if (!RwInitialized)
+    case GAME_STATE_IDLE: { // 0x748AA1
+        ZoneScopedN("IDLE");
+
+        if (!RwInitialized) {
             break;
+        }
 
         auto v9_1 = 1000.0f / (float)RsGlobal.frameLimit;
         auto v9_2 = (float)CTimer::GetCurrentTimeInCycles() / (float)CTimer::GetCyclesPerMillisecond();
@@ -329,7 +347,9 @@ void MainLoop(INT nCmdShow) {
         gamma.Init();
 
         // Game logic main loop
-        while (ProcessGameLogic(nCmdShow));
+        while (ProcessGameLogic(nCmdShow)) {
+            FrameMark;
+        }
 
         // 0x748DDA
         RwInitialized = false;

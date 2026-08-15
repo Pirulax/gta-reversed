@@ -21,11 +21,18 @@ namespace RHDebugModule {
 class HooksBuildListStep {
 public:
     HooksBuildListStep(
-        size_t                                         maxItems      = 16'384,
-        size_t                                         maxCategories = 4096
+        size_t maxItems      = 16'384,
+        size_t maxCategories = 4'096
     );
 
     StepsCategory* ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> cat) noexcept;
+
+    /*!
+     * @brief Re-calculate the common state of the category and its items
+     * @param cat 
+     * @return true if any of the common states or flags have changed, false otherwise
+     */
+    bool UpdateCategory(StepsCategory& cat) const noexcept;
 
 private:
     CPool<StepsItem>     m_PoolItem;

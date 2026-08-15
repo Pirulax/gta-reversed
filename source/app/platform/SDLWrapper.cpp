@@ -26,6 +26,8 @@ void Terminate() {
 }
 
 void ProcessEvents() {
+    ZoneScoped;
+
     // Now process events
     const auto* const imCtx = ImGui::GetCurrentContext();
     const auto* const imIO  = imCtx ? &imCtx->IO : nullptr;

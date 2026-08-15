@@ -10,7 +10,7 @@
 
 #include <TristateCheckbox.h>
 
-#include <extensions/utility.hpp>
+#include <extensions/CustomFormatters.hpp>
 #include <reversiblehooks/ReversibleHooks.h>
 #include <reversiblehooks/HookCategory.h>
 
@@ -21,9 +21,11 @@
 
 namespace RH = ReversibleHooks;
 namespace rng = std::ranges;
-using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
 
+using namespace RHDebugModule;
 using namespace ImGui;
+
+using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
 
 constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
 
@@ -55,21 +57,21 @@ void RHDebugModule::HooksDebugModule::FilteringThread() {
         if (m_FilterProcessor.Exiting) {
             break;
         }
-        if (!m_ToRender) {
+        if (!m_HooksList.RootCategory) {
             continue; // Nothing to filter
         }
         /* Hold lock until we finish */
         NOTSA_LOG_DEBUG("Running filter");
         const auto now = FilterClock::now();
-        HooksFilterListStep{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_ToRender);
-        HooksSortListStep{}.Process(*m_ToRender);
-        m_FilterProcessor.TimeToFinish = FilterClock::now() - now;
-        m_FilterProcessor.DidJustFinish = true;
+        HooksFilterListStep{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_HooksList.RootCategory);
+        HooksSortListStep{}.Process(*m_HooksList.RootCategory);
+        m_FilterProcessor.FinishedAt        = FilterClock::now();
+        m_FilterProcessor.NeedToAckFinished = true;
     }
 }
 
 bool RHDebugModule::HooksDebugModule::RunFilter() {
-    if (!m_ToRender) {
+    if (!m_HooksList.RootCategory) {
         return false; // Nothing to filter
     }
     {
@@ -78,68 +80,35 @@ bool RHDebugModule::HooksDebugModule::RunFilter() {
             return false; // Filter still running
         }
         m_FilterProcessor.HookFilter = { m_Filter.Input, m_Filter.CaseSensitive, m_Filter.Cutoffs };
+        m_FilterProcessor.StartedAt  = FilterClock::now();
     }
     m_FilterProcessor.CV.notify_one();
     return true;
-    //    if (m_FilterTask.valid() && m_FilterTask.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
-    //return false; // Previous task still running, it has to finish first, because data is shared
-    //    }
-    //
-    //    m_FilterTask = std::async([this, filter = HookFilter{ m_FilterInput, m_FilterCutoffs }] mutable {
-    //#ifdef TRACY_ENABLE
-    //tracy::SetThreadName("HooksDebugModule::RunFiltering");
-    //#endif
-    //HooksFilterListStep{ std::move(filter) }.Process(*m_ToRender);
-    //HooksSortListStep{}.Process(*m_ToRender);
-    //    });
-    //
-    //    return true;
 }
 
-void RHDebugModule::HooksDebugModule::RenderFilter() {
-    notsa::ui::ScopedID idg{ "Filter" };
-
-    bool changed = false;
-
-    if (TreeNode("Filter Options")) {
-        changed |= Checkbox("Show Filter Scores", &m_Filter.ShowScores);
-        changed |= Checkbox("Case Sensitive", &m_Filter.CaseSensitive);
-        if (TreeNode("Cutoffs")) {
-            const auto CutoffSlider = [&](float* value, const char* name) {
-                changed |= SliderFloat(name, value, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
-            };
-            CutoffSlider(&m_Filter.Cutoffs.Category, "Category");
-            CutoffSlider(&m_Filter.Cutoffs.CategoryGlobal, "CategoryGlobal");
-            CutoffSlider(&m_Filter.Cutoffs.ItemGlobal, "ItemGlobal");
-            CutoffSlider(&m_Filter.Cutoffs.ItemLocal, "ItemLocal");
-            CutoffSlider(&m_Filter.Cutoffs.ItemAddress, "ItemAddress");
-
-            TreePop();
-        }
-
-        TreePop();
-    }
-
-    SetNextItemWidth(-1.f);
-    changed |= InputText("##Input", &m_Filter.Input);
-    if (IsItemHovered()) {
-        SetTooltip(
-            "`::function`         - Filters only functions \n"
-            "`cpy`                - Filter namespace - Will only show namespace with name containing \"cphy\"\n"
-            "`ped/player`         - Should only show Ped/CPlayerPed\n"
-            "`ped/player::busted` - Should only show `Ped/CPlayerPed` with the `busted` function visible only\n"
-            "`/entity`            - Should only show the top level `Entity` namespace in Root\n"
-            "For more tips see gta-reversed-modern/discussions/190\n"
-        );
-    }
-    
-    if (changed) {
+void RHDebugModule::HooksDebugModule::CheckNeedsToRunFilter() {
+    if (std::exchange(m_Filter.Changed, false)) {
         m_Filter.RunAt = FilterClock::now() + FILTER_INPUT_DEBOUNCE_TIME;
     } else if (m_Filter.RunAt.has_value() && *m_Filter.RunAt < FilterClock::now()) {
         if (RunFilter()) {
             m_Filter.RunAt = std::nullopt;
         }
     }
+}
+
+void RHDebugModule::HooksDebugModule::RenderFilter() {
+    SetNextItemWidth(-1.f);
+    m_Filter.Changed |= InputText("##FilterInput", &m_Filter.Input);
+    SetItemTooltip(
+        "`cpy`                - Filter by category/function\n"
+        "`cped::`             - Filter by category name\n"
+        "`ped/player`         - Filter by category path\n"
+        "`::function`         - Filter by function name, any category\n"
+        "`ped/player::busted` - Filter by both category path and function name\n"
+        "`/entity`            - Filter relative to root, must match whole path\n"
+        "Use `*` as wildrcard\n"
+        "For more tips see gta-reversed-modern/discussions/190\n"
+    );
 }
 
 const char* StateToString(HookState state) {
@@ -151,24 +120,29 @@ const char* StateToString(HookState state) {
     }
 }
 
-void StateButton(
+template<
+    std::predicate<HookState> SetStateFn,
+    std::predicate<>          RestoreStateFn>
+bool StateButton(
     const char*              title,
     bool                     disabled,
     ImTristate               onOffCheckboxState,
     std::optional<HookState> current,
     HookState                next,
-    auto&&                   SetState,
-    auto&&                   RestoreState
+    SetStateFn&&             SetState,
+    RestoreStateFn&&         RestoreState
 ) {
     notsa::ui::ScopedID      idg{ "state" };
     notsa::ui::ScopedDisable sdg{ disabled };
 
+    bool changed = false;
+
     SameLine(); 
     if (bool checked; CheckboxTristate("##on-off", onOffCheckboxState, checked)) {
         if (checked) {
-            RestoreState();
+            changed |= RestoreState();
         } else {
-            SetState(HookState::Unhooked);
+            changed |= SetState(HookState::Unhooked);
         }
     }
 
@@ -187,12 +161,14 @@ void StateButton(
 
     SameLine();
     if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
-        SetState(next);
+        changed |= SetState(next);
     }
     PopStyleColor();
 
     SameLine();
     TextUnformatted(title);
+
+    return changed;
 }
 
 auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false) noexcept {
@@ -229,15 +205,38 @@ void RHDebugModule::HooksDebugModule::RenderMenuBar() {
             }
             ImGui::EndMenu();
         }
+        if (ImGui::BeginMenu("Options")) {
+            if (ImGui::BeginMenu("Filter")) {
+                m_Filter.Changed |= Checkbox("Show Filter Scores", &m_Filter.ShowScores);
+                m_Filter.Changed |= Checkbox("Case Sensitive", &m_Filter.CaseSensitive);
+                if (BeginMenu("Cutoffs")) {
+                    const auto CutoffSlider = [&](float* value, const char* name) {
+                        m_Filter.Changed |= SliderFloat(name, value, 0.f, 1.f, "%.2f", ImGuiSliderFlags_AlwaysClamp);
+                    };
+                    CutoffSlider(&m_Filter.Cutoffs.CategoryInPath, "CategoryInPath");
+                    CutoffSlider(&m_Filter.Cutoffs.CategoryGlobal, "CategoryGlobal");
+                    CutoffSlider(&m_Filter.Cutoffs.ItemGlobal, "ItemGlobal");
+                    CutoffSlider(&m_Filter.Cutoffs.ItemLocal, "ItemLocal");
+                    CutoffSlider(&m_Filter.Cutoffs.ItemAddress, "ItemAddress");
+                    if (Button("Reset Cutoffs")) {
+                        m_Filter.Cutoffs = {};
+                        m_Filter.Changed = true;
+                    }
+                    ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            ImGui::EndMenu();
+        }
         ImGui::EndMenuBar();
     }
 }
 
-// Should acquire lock on `cat.ItemsMtx` before calling
 bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
     if (!IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems)) {
         return false;
     }
+    bool changed = false;
     for (auto& item : cat.Items) {
         if (!IsMatchingScoreOrNone(item.FilterScore)) {
             continue;
@@ -253,7 +252,7 @@ bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
         }
 
         // State checkbox
-        StateButton(
+        changed |= StateButton(
             m_Filter.ShowScores
                 ? std::format("{} (Score: {})", item.Ptr->GetName(), item.FilterScore.value_or(-1.f)).c_str()
                 : item.Ptr->GetName().c_str(),
@@ -265,8 +264,8 @@ bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
             item.Ptr->GetState() == HookState::RedirectToOurs
                 ? HookState::RedirectToGTA
                 : HookState::RedirectToOurs,
-            [&] (HookState s) { item.Ptr->SetState(s); },
-            [&] () { item.Ptr->SetToPreviousState(); }
+            [&] (HookState s) { return item.Ptr->SetState(s); },
+            [&] () { return item.Ptr->SetToPreviousState(); }
         );
 
         if (IsItemHovered()) {
@@ -289,16 +288,25 @@ bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
             }
         }
     }
-    return true;
+    return changed;
 }
 
-bool HooksDebugModule::RenderCategory(StepsCategory& cat) {
-    if (!IsMatchingScoreOrNone(cat.MaxFilterScore)) {
-        return false;
+
+auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResult {
+    if (!cat.Items.IsEmpty() && !cat.Categories.IsEmpty()) {
+        return RenderCategoryResult::SKIPPED_NOTHING_TO_SHOW;
     }
 
-    const auto hasItemsToShow      = cat.HasItems && IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems),
-               hasCategoriesToShow = cat.HasSubCategories && IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats);
+    if (!IsMatchingScoreOrNone(cat.MaxFilterScore)) {
+        return RenderCategoryResult::SKIPPED_FILTERED;
+    }
+
+    const auto hasOwnItemsToShow = !cat.Items.IsEmpty() && IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems),
+               hasCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
+
+    if (!hasOwnItemsToShow && !hasCategoriesToShow) {
+        return RenderCategoryResult::SKIPPED_FILTERED;
+    }
 
     notsa::ui::ScopedID idg{ cat.Category->Name() };
 
@@ -315,7 +323,7 @@ bool HooksDebugModule::RenderCategory(StepsCategory& cat) {
         const auto open = TreeNodeEx("##         ", ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanFullWidth);
         
         SameLine();
-        StateButton(
+        const auto changed = StateButton(
             label,
             disabled,
             commonState == HookState::Unhooked
@@ -329,17 +337,6 @@ bool HooksDebugModule::RenderCategory(StepsCategory& cat) {
             RestoreState
         );
 
-        // Tree is never disabled, otherwise it couldn't be opened
-        //DisabledScope(disabled);
-        //
-        //// Checkbox + it's label will be the tree name
-        //bool cbState{ commonState.has_value() };
-        //const auto stateChanged = Checkbox(label, &cbState);
-        //
-        //if (SameLine(); Button(commonState.has_value() ? StateToString(*commonState) : "mixed")) {
-        //    cbState = !cbState;
-        //}
-
         //if (IsItemHovered()) {
         //    SetTooltip(
         //        "Left click: Redirect to Our/GTA code\n"
@@ -349,105 +346,125 @@ bool HooksDebugModule::RenderCategory(StepsCategory& cat) {
         //    );
         //}
 
-        return std::make_tuple(open, false);
+        return std::make_tuple(open, changed);
     };
 
     // Category tree node
-    if (m_FilterProcessor.DidJustFinish) {
-        if (cat.MaxFilterScore > 0.f) {
-            SetNextItemOpen(true, ImGuiCond_Always);
-        }
+    if (m_FilterProcessor.NeedToAckFinished) {
+        SetNextItemOpen(cat.MaxScoreAllItems > 0.f || cat.MaxFilterScoreSubCats > 0.f, ImGuiCond_Always);
     }
 
-    const auto [open, stateChanged] = TreeNodeWithCheckbox(
+    const auto SetCategoryOwnItemsState = [&](StepsCategory& c, HookState state) {
+        return rng::fold_left(c.Items, false, [state](bool changed, StepsItem& item) {
+            return changed | item.Ptr->SetState(state);
+        });
+    };
+
+    const auto RestoreCategoryOwnItemsState = [&](StepsCategory& c) {
+        return rng::fold_left(c.Items, false, [](bool changed, StepsItem& item) {
+            return changed | item.Ptr->SetToPreviousState();
+        });
+    };
+
+    const auto [open, categoryStateChanged] = TreeNodeWithCheckbox(
         m_Filter.ShowScores
             ? std::format(
-                  "{} Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}",
+                  "{} [Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}",
                   cat.Category->Name(),
-                  cat.FilterScore.value_or(-1.f),
-                  cat.MaxFilterScoreOwnItems.value_or(-1.f),
-                  cat.MaxFilterScoreSubItems.value_or(-1.f),
-                  cat.MaxScoreAllItems.value_or(-1.f),
-                  cat.MaxFilterScoreSubCats.value_or(-1.f),
-                  cat.MaxFilterScore.value_or(-1.f)
+                  cat.FilterScore,
+                  cat.MaxFilterScoreOwnItems,
+                  cat.MaxFilterScoreSubItems,
+                  cat.MaxScoreAllItems,
+                  cat.MaxFilterScoreSubCats,
+                  cat.MaxFilterScore
               ).c_str()
             : cat.Category->Name().c_str(),
         !cat.AnyUnlockedItems,
         cat.AnyUnhookedItems,
         cat.CommonStateAllItems,
-        //cat.CommonStateAllItems.value_or(cat.m_LastSetAllState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
-        cat.CommonStateAllItems.value_or(HookState::RedirectToOurs) == HookState::RedirectToOurs
+        cat.CommonStateAllItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
             ? HookState::RedirectToGTA
             : HookState::RedirectToOurs,
-        [&] (HookState s) { NOTSA_LOG_ERR("TODO"); }, // cat.SetAllItemsState(s);
-        [&] () { NOTSA_LOG_ERR("TODO"); } // cat.SetAlStepItemsToPreviousState();
+        [&] (HookState state) {
+            cat.LastSetOurItemsState = state;
+            return [&, state](this auto&& Self, StepsCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
+                bool changed = SetCategoryOwnItemsState(c, state);
+                for (auto& sc : c.Categories) {
+                    changed |= Self(sc);
+                }
+                return changed;
+            }(cat);
+        },
+        [&] () {
+            return [&](this auto&& Self, StepsCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
+                bool changed = RestoreCategoryOwnItemsState(c);
+                for (auto& sc : c.Categories) {
+                    changed |= Self(sc);
+                }
+                return changed;
+            }(cat);
+        }
     );
     if (!open) {
-        return true;
+        return RenderCategoryResult::SKIPPED_CLOSED;
     }
-    //if (stateChanged) {
-    //    cat.ToggleAlStepItemsState();
-    //}
-    //if (bool state = cbState; HandleSlideSetterForItem(state)) {
-    //    cat.SetAlStepItemsState(state);
-    //}
-    //cat.Open(open);
-    
-    //if (!cat.Open()) {
-    //    return;
-    //}
 
-    //
-    // Draw hooks, and subcategories
-    //
-
-    // Draw hooks (items) (if any)
-    if (hasItemsToShow) {
+    // Draw items (hooks) (if any)
+    bool itemsStateChanged = false;
+    if (hasOwnItemsToShow) {
         if (hasCategoriesToShow) { // Render a separate tree node that's like a category for the items
-            if (m_FilterProcessor.DidJustFinish) {
+            if (m_FilterProcessor.NeedToAckFinished) {
                 if (cat.MaxFilterScoreOwnItems > 0.f) {
-                    SetNextItemOpen(true, ImGuiCond_Always);
+                    SetNextItemOpen(cat.MaxFilterScoreOwnItems > 0.f, ImGuiCond_Always);
                 }
             }
-            NOTSA_LOG_ERR("TODO");
-            //const auto [open, stateChanged] = TreeNodeWithCheckbox(
-            //    "Hooks",
-            //    cat.AreItemsLocked(),
-            //    cat.m_AnyOurItemsUnhooked,
-            //    cat.ItemsState(),
-            //    cat.ItemsState().value_or(cat.m_LastSetOurState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
-            //        ? HookState::RedirectToGTA
-            //        : HookState::RedirectToOurs,
-            //    [&](HookState s) { cat.SetOurItemsState(s); },
-            //    [&] () { cat.SetOurItemsToPreviousState(); }
-            //);
-            //
-            //if (stateChanged) {
-            //    //cat.SetOurItemsState(cbState);
-            //    //cat.ToggleAlStepItemsState();
-            //    NOTSA_UNREACHABLE("todo");
-            //}
-            //
-            //if (open) {
-            //    RenderCategoryItems(cat);
-            //    TreePop();
-            //}
+            const auto [open, stateChanged] = TreeNodeWithCheckbox(
+                m_Filter.ShowScores
+                    ? std::format("Hooks [Max filter score: {}]", cat.MaxFilterScoreOwnItems).c_str()
+                    : "Hooks",
+                !cat.AnyUnlockedOurItems,
+                cat.AnyUnhookedOurItems,
+                cat.CommonStateOwnItems,
+                cat.CommonStateOwnItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+                    ? HookState::RedirectToGTA
+                    : HookState::RedirectToOurs,
+                [&] (HookState s) {
+                    cat.LastSetOurItemsState = s;
+                    return SetCategoryOwnItemsState(cat, s);
+                },
+                [&] () {
+                    return RestoreCategoryOwnItemsState(cat);
+                }
+            );
+            if (open) {
+                RenderCategoryItems(cat);
+                TreePop();
+            }
         } else { // If there are no subcategories we can draw all items directly under this node
-            RenderCategoryItems(cat);
+            itemsStateChanged |= RenderCategoryItems(cat);
         }
     }
-    
 
     // Draw subcategories
+    bool subCategoriesStateChanged = false;
     if (hasCategoriesToShow) {
         for (auto& v : cat.Categories) {
-            RenderCategory(v);
+            subCategoriesStateChanged |= RenderCategory(v) == RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED;
         }
     }
 
+    // Pop the category's tree node
     TreePop();
 
-    return true;
+    // Now check if we've changed, and if so, check if that change affects the state of the parent
+    bool changed = itemsStateChanged || categoryStateChanged || subCategoriesStateChanged;
+    if (changed) {
+        changed &= m_HooksList.Builder.UpdateCategory(cat);
+    }
+
+    return changed
+        ? RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED
+        : RenderCategoryResult::RENDERED;
 }
 
 const char* RHDebugModule::HooksDebugModule::GetWindowTitle() noexcept {
@@ -458,7 +475,7 @@ const char* RHDebugModule::HooksDebugModule::GetWindowTitle() noexcept {
     Append("ReversibleHooks (TM) (R)");
     std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
     if (lock.owns_lock()) {
-        Append(" - [Filtering: {} ms]", std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.TimeToFinish));
+        Append(" - [Filtering: {} ms]", std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.FinishedAt - m_FilterProcessor.StartedAt));
     } else {
         Append(" - [Status: Filtering...]");
     }
@@ -482,8 +499,8 @@ void HooksDebugModule::RenderWindow() {
         return;
     }
 
-    if (!m_ToRender) {
-        m_ToRender = m_Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
+    if (!m_HooksList.RootCategory) {
+        m_HooksList.RootCategory = m_HooksList.Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
     }
 
     UpdateSlideSetterMode();
@@ -493,14 +510,23 @@ void HooksDebugModule::RenderWindow() {
     {
         std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
         if (lock.owns_lock()) {
-            if (!RenderCategory(*m_ToRender)) {
-                notsa::ui::WindowCenteredTextUnformatted("No filter results");
+            switch (RenderCategory(*m_HooksList.RootCategory)) {
+            case RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED: {
+                m_HooksList.Builder.UpdateCategory(*m_HooksList.RootCategory);
+                break;
             }
-            m_FilterProcessor.DidJustFinish = false;
+            case RenderCategoryResult::SKIPPED_FILTERED: {
+                notsa::ui::WindowCenteredTextUnformatted("No filter results");
+                break;
+            }
+            }
+            m_FilterProcessor.NeedToAckFinished = false;
         } else {
             notsa::ui::WindowCenteredTextUnformatted("Filtering in progress...");
         }
     }
+
+    CheckNeedsToRunFilter();
 }
 
 void HooksDebugModule::RenderMenuEntry() {

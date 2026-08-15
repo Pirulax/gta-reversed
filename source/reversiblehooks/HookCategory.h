@@ -73,41 +73,11 @@ public:
 
     bool IsEmpty() const noexcept { return m_items.empty() && m_subCategories.empty(); }
 
-    /*!
-     * @return If all items (including those of sub-categories) are locked
-     */
-    //bool IsLocked() const noexcept {
-    //    if (!AreItemsLocked()) {
-    //        return false;
-    //    }
-    //    return rng::all_of(m_subCategories, [](const auto& cat) {
-    //        return cat.IsLocked();
-    //    });
-    //}
-
-    /*!
-     * @return If all of our items are locked
-     */
-   // bool AreItemsLocked() const {
-   //     return m_AllItemsLocked;
-   // }
-
     //! Add one item to this category (Deal with possible state change)
     void AddItem(HookCategoryItem item) {
         assert(!FindItem(item.GetName()) && "Category already contains an item with such name");
 
-        //m_AllItemsLocked = (m_AllItemsLocked || m_items.empty()) && item.GetIsStateLocked();
-
         m_items.emplace_back(std::make_shared<HookCategoryItem>(std::move(item)));
-
-        // Lexographically sorted insert
-        //m_items.emplace(
-        //    rng::upper_bound(m_items, item.GetName(), {}, [](auto&& v) { return v->GetName(); }),
-        //    std::make_shared<HookCategoryItem>(std::move(item))
-        //);
-
-        // Re-calculate items state with this item now added
-        //OnItemStateChanged(*emplacedItem);
     }
 
     //! Find item by name (function name)

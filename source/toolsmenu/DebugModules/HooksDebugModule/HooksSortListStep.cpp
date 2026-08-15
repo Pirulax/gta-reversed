@@ -27,38 +27,38 @@ void HooksSortListStep::Process(StepsCategory& cat) noexcept {
         buf.clear();
     };
 
-    if (cat.HasItems) {
-        SortList([](const StepsItem* a, const StepsItem* b) {
-            if (a->FilterScore.has_value() && b->FilterScore.has_value()) {
-                return a->FilterScore < b->FilterScore;
-            }
-            return a->Ptr->GetName() < b->Ptr->GetName();
-        }, cat.Items, m_BufSortedItems);
-        //cat.Items.Sort([](const StepsItem& a, const StepsItem& b) {
-        //    if (a.FilterScore.has_value() || b.FilterScore.has_value()) {
-        //        return a.FilterScore < b.FilterScore;
-        //    }
-        //    return a.Ptr->GetName() < b.Ptr->GetName();
-        //});
-    }
-
-    if (cat.HasSubCategories) {
-        //SortList([](const StepsCategory* a, const StepsCategory* b) {
-        //    if (a->MaxFilterScore.has_value() && b->MaxFilterScore.has_value()) {
-        //        return a->MaxFilterScore > b->MaxFilterScore;
-        //    }
-        //    return a->Category->Name() < b->Category->Name();
-        //}, cat.Categories, m_BufSortedCategories);
-        cat.Categories.Sort([](const StepsCategory& a, const StepsCategory& b) {
-            if (a.MaxFilterScore.has_value() && b.MaxFilterScore.has_value()) {
-                return a.MaxFilterScore > b.MaxFilterScore;
-            }
-            return a.Category->Name() < b.Category->Name();
-        });
-
-        for (auto& v : cat.Categories) {
-            Process(v);
+    /* Sort items */
+    SortList([](const StepsItem* a, const StepsItem* b) {
+        if (a->FilterScore.has_value() && b->FilterScore.has_value()) {
+            return a->FilterScore < b->FilterScore;
         }
-    }
+        return a->Ptr->GetName() < b->Ptr->GetName();
+    }, cat.Items, m_BufSortedItems);
+    //cat.Items.Sort([](const StepsItem& a, const StepsItem& b) {
+    //    if (a.FilterScore.has_value() || b.FilterScore.has_value()) {
+    //        return a.FilterScore < b.FilterScore;
+    //    }
+    //    return a.Ptr->GetName() < b.Ptr->GetName();
+    //});
+
+
+    /* Sort categories */
+    //SortList([](const StepsCategory* a, const StepsCategory* b) {
+    //    if (a->MaxFilterScore.has_value() && b->MaxFilterScore.has_value()) {
+    //        return a->MaxFilterScore > b->MaxFilterScore;
+    //    }
+    //    return a->Category->Name() < b->Category->Name();
+    //}, cat.Categories, m_BufSortedCategories);
+    cat.Categories.Sort([](const StepsCategory& a, const StepsCategory& b) {
+        if (a.MaxFilterScore.has_value() && b.MaxFilterScore.has_value()) {
+            return a.MaxFilterScore > b.MaxFilterScore;
+        }
+        return a.Category->Name() < b.Category->Name();
+    });
+
+    /* Recurse into categories */
+    for (auto& v : cat.Categories) {
+        Process(v);
+    }  
 }
 }; // namespace RHDebugModule

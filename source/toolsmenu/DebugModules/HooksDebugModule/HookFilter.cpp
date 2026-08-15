@@ -38,9 +38,6 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
             if (m_CategoryPathTokens.size() == 1 && m_CategoryPathTokens.front().empty()) {
                 m_CategoryPathTokens.clear(); // An empty string would match all strings, so there's no point in keeping it
             }
-            if (m_CategoryPathTokens.size() > 1 && m_CategoryPathTokens.front().empty()) { // Eg.: `/...`
-                m_CategoryPathTokens[0] = ReversibleHooks::RootHookCategory::GetRootName(); // This corresponds to the root namespace filter
-            }
         }
         // Second half (if any) or the whole input is the hook filter
         const auto hookFilterStr = hasNamespaceSep
@@ -111,93 +108,41 @@ bool HookFilter::IsFilteringByCategoryPath() const noexcept {
     return true;
 }
 
-float HookFilter::MatchCategoryByNamespace(const NamespaceTokens& ns, size_t depth) const noexcept {
-    //const auto MatchRanges = [&] (int32 start, int32 stop, int32 step) {
-    //    for (int32 i = start; i < stop; i += step) { // 10
-    //           
-    //    }
-    //};
+float HookFilter::MatchCategoryByNamespace(const NamespaceTokens& path, size_t depth) const noexcept {
+    assert(path.size() > depth);
 
     float total = 0.f;
-    const auto Match = [&, cutoff = IsSimpleFilterString() ? m_Cutoffs.CategoryGlobal : m_Cutoffs.Category] (size_t i) {
-        const auto match = MatchString(ns[i], m_CategoryPathTokens[i], cutoff, m_IsCaseSensitive);
+    const auto Match = [&] (size_t idxHaystack, size_t idxNeedle) {
+        const auto match = MatchString(path[idxHaystack], m_CategoryPathTokens[idxNeedle], m_Cutoffs.CategoryInPath, m_IsCaseSensitive, true);
         total += match;
         return match > 0.f;
     };
 
-    if (IsRootRelativeNamespace()) { // Root must match from the front -> back
-        for (size_t i = 0; i < m_CategoryPathTokens.size(); i++) {
-            if (i >= ns.size()) { 
+    if (IsRootRelativeNamespace()) { // Root must match stricly match the beginning, it's ok if there are more tokens
+        if (depth == 0) {
+            return 1.f; // Root will always match the beginning of the path at this depth
+        }
+        for (size_t i = 1; i < m_CategoryPathTokens.size(); i++) { // Start at 1, because 0 is root
+            if (i > depth) { 
                 break; // We can't match now, but might match later
             }
-            if (!Match(i)) {
+            if (!Match(i, i)) {
                 return 0.f; // Part didn't match
             }
         }
-    } else { // This should match from back -> front
-        for (size_t i = m_CategoryPathTokens.size(); i --> 0;) {
-            if (i >= ns.size()) { 
-                return false; // Can't match whole, so just stop now
-            }
-            if (!Match(i)) {
+    } else { // This should match at the end
+        if (m_CategoryPathTokens.size() > depth + 1) {
+            return 0.f; // Can't match whole, so just stop now
+        }
+        const auto off = (depth + 1) - m_CategoryPathTokens.size();
+        for (size_t i = 0; i < m_CategoryPathTokens.size(); i++) {
+            if (!Match(off + i, i)) {
                 return 0.f; // Part didn't match
             }
         }
     }
 
     return total;
-
-
-    //const auto Match = [&](size_t i) {
-    //    return MatchString(ns[i], m_NamespaceTokens[i], m_Cutoff, m_IsCaseSensitive);
-    //    //return StringContainsString(name, m_NamespaceTokens[nsTokenIdx], m_IsCaseSensitive)
-    //    //    ? 1.0f
-    //    //    : 0.f;
-    //};
-    //if (IsRootRelativeNamespace()) {
-    //    if (depth < m_NamespaceTokens.size()) {
-    //        return 0.f; // Not enough tokens to match
-    //    }
-    //    return Match(depth);
-    //}
-    //return rng::fold_left(rng::views::iota(0u, m_NamespaceTokens.size()), 0.f, [&](float max, size_t i) {
-    //    if (depth + i >= ns.size()) {
-    //        return max; // Not enough tokens to match
-    //    }
-    //    return std::max(max, Match(depth + i));
-    //});
-    //float match = 0.f;
-    //for (size_t i = 0; i < m_NamespaceTokens.size(); ++i) {
-    //    if (depth + i >= ns.size()) {
-    //        break; // Not enough tokens to match
-    //    }
-    //    match = std::max(match, Match(depth + i));
-    //}
-    //return match;
-
-    //const auto Match = [this](const auto& range) -> float {
-    //    float score = 0.f;
-    //    for (auto&& [haystack, needle] : range) { // We don't check root, drop 1
-    //        if (!StringContainsString(haystack, needle, m_IsCaseSensitive)) {
-    //            return std::nullopt;
-    //        }
-    //        score += 1.f;
-    //    }
-    //    return score;
-    //};
-
-   //if (IsRootRelativeNamespace()) { // Check if path matches from the beginning
-    //    if (path.size() < m_NamespaceTokens.size()) {
-    //        return std::nullopt; // Not enough tokens to match
-    //    }
-    //    return Match(rngv::zip(path, m_NamespaceTokens) | rngv::drop(1)); // We don't check root, drop 1
-    //} else { // Check if filter matches path from the end
-    //    if (path.size() < m_NamespaceTokens.size()) {
-    //        return std::nullopt; // Not enough tokens to match
-    //    }
-
-   // //    for 
-    //}
 }
 
 float HookFilter::MatchCategoryByName(std::string_view name) const noexcept {
@@ -205,8 +150,13 @@ float HookFilter::MatchCategoryByName(std::string_view name) const noexcept {
     return MatchString(name, m_CategoryPathTokens.front(), m_Cutoffs.CategoryGlobal, m_IsCaseSensitive);
 }
 
-float HookFilter::MatchString(std::string_view haystack, std::string_view needle, float cutoff, bool caseSensitive) const noexcept {
-    if (haystack.empty() || needle.empty()) {
+float HookFilter::MatchString(std::string_view haystack, std::string_view needle, float cutoff, bool caseSensitive, bool emptyNeedleMatchesAll) const noexcept {
+    if (needle.empty()) {
+        return emptyNeedleMatchesAll ? 1.f : 0.f; // This way if user didn't type anything stuff will still show up
+    } else if (needle == WILDCARD_CHAR) {
+        return 1.f;
+    }
+    if (haystack.empty()) {
         return 0.f;
     }
     const auto CalculateScore = [&] (size_t pos) {

@@ -35,7 +35,7 @@ float HooksFilterListStep::CalculateCategoryScoresByName(StepsCategory& cat) con
     return std::max(cat.MaxFilterScoreSubCats.value_or(0.f), *cat.FilterScore);
 }
 
-float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, HookFilter::NamespaceTokens& ns, size_t depth) const noexcept {
+float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, const StepsCategory* parent, HookFilter::NamespaceTokens& ns, size_t depth) const noexcept {
     cat.FilterScore           = m_Filter.MatchCategoryByNamespace(ns, depth);
     cat.MaxFilterScoreSubCats = std::nullopt;
 
@@ -43,11 +43,16 @@ float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, Hoo
         if (cat.FilterScore <= 0.f) {
             return 0.f; // If we didn't match neither will any of our sub-categories, so we can just stop here
         }
+    } else if (parent) {
+        // Filter just checks the end of the path as an optimization, but
+        // but, logically, if our parent has matched, at worst our filter score
+        // should be at least as good as our parent's filter score
+        cat.FilterScore = std::max(cat.FilterScore, parent->FilterScore);
     }
 
     for (auto& sc : cat.Categories) {
         ns.push_back(sc.Category->Name());
-        cat.MaxFilterScoreSubCats = std::max(cat.MaxFilterScoreSubCats.value_or(0.f), CalculateCategoryScoresByPath(sc, ns, depth + 1));
+        cat.MaxFilterScoreSubCats = std::max(cat.MaxFilterScoreSubCats.value_or(0.f), CalculateCategoryScoresByPath(sc, &cat, ns, depth + 1));
         ns.pop_back();
     }
 
@@ -56,7 +61,7 @@ float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, Hoo
 
 float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat) const noexcept {
     HookFilter::NamespaceTokens ns = { cat.Category->Name() };
-    return CalculateCategoryScoresByPath(cat, ns, 0);
+    return CalculateCategoryScoresByPath(cat, nullptr, ns, 0);
 }
 
 void HooksFilterListStep::SetCategoryUnfilteredCategoryScores(StepsCategory& cat) const noexcept {
@@ -74,7 +79,7 @@ std::optional<float> HooksFilterListStep::CalculateCategoryItemsScore(StepsCateg
         return std::nullopt;
     }
 
-    if (cat.HasItems) {
+    if (!cat.Items.IsEmpty()) {
         cat.MaxFilterScoreOwnItems = 0.f;
         for (auto& i : cat.Items) {
             const auto score = m_Filter.MatchItem(
@@ -111,7 +116,7 @@ void HooksFilterListStep::SetCategoryUnfilteredItemsScore(StepsCategory& cat) co
     }
 }
 void HooksFilterListStep::CalculateCategoryMaxScores(StepsCategory& cat) const noexcept {
-    cat.MaxFilterScore = std::max(cat.MaxFilterScoreSubCats, cat.MaxScoreAllItems);
+    cat.MaxFilterScore = std::max({cat.MaxFilterScoreSubCats, cat.MaxScoreAllItems, cat.FilterScore});
     for (auto& sc : cat.Categories) {
         CalculateCategoryMaxScores(sc);
     }
