@@ -2,6 +2,7 @@
 
 #include <thread>
 #include <chrono>
+#include <bitset>
 #include <string>
 
 #include <toolsmenu/DebugModules/DebugModule.h>
@@ -104,10 +105,16 @@ private:
         ImGuiID   LastUsedOnID{};
     } m_SlideSetter{};
 
-    struct HookList {
-        RListBuilder Builder;
-        RListCategory*     RootCategory; //!< Data is owned by the `Builder`
-    } m_HooksList{};    
+    struct {
+        RListBuilder   Builder;
+        RListCategory* RootCategory; //!< Data is owned by the `Builder`
+    } m_RenderList{};
+
+    struct HooksExport {
+        std::bitset<+HookState::Count> SelectedStates{};        //< States to export
+        bool                           ExcludeSelectedStates{}; //!< Exclude (instead of including) the selected states
+        bool                           OnlyFiltered{};          //!< Export only items that match the current filter (Or all, if no filter)
+    } m_HooksExport;
 };
 }; // namespace RHDebugModule
 

@@ -44,21 +44,21 @@ void HooksDebugModule::FilteringThread() {
         if (m_FilterProcessor.Exiting) {
             break;
         }
-        if (!m_HooksList.RootCategory) {
+        if (!m_RenderList.RootCategory) {
             continue; // Nothing to filter
         }
         /* Hold lock until we finish */
         NOTSA_LOG_DEBUG("Running filter");
         const auto now = FilterClock::now();
-        RListFilterer{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_HooksList.RootCategory);
-        RListSorter{}.Process(*m_HooksList.RootCategory);
+        RListFilterer{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_RenderList.RootCategory);
+        RListSorter{}.Process(*m_RenderList.RootCategory);
         m_FilterProcessor.FinishedAt        = FilterClock::now();
         m_FilterProcessor.NeedToAckFinished = true;
     }
 }
 
 bool HooksDebugModule::RunFilter() {
-    if (!m_HooksList.RootCategory) {
+    if (!m_RenderList.RootCategory) {
         return false; // Nothing to filter
     }
     {
@@ -415,7 +415,7 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
             return [&, state](this auto&& Self, RListCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
                 bool changed = SetCategoryOwnItemsState(c, state);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);
+                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc);
                 }
                 return changed;
             }(cat);
@@ -424,7 +424,7 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
             return [&](this auto&& Self, RListCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
                 bool changed = RestoreCategoryOwnItemsState(c);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);
+                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc);
                 }
                 return changed;
             }(cat);
@@ -480,7 +480,7 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
 
     // Now check if we've changed, and if so, check if that change affects the state of the parent
     if (changed) {
-        changed &= m_HooksList.Builder.UpdateCategory(cat);
+        changed &= m_RenderList.Builder.UpdateCategory(cat);
     }        
 
     return changed
@@ -493,9 +493,9 @@ void HooksDebugModule::RenderHooksSection() {
 
     std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
     if (lock.owns_lock()) {
-        switch (RenderCategory(*m_HooksList.RootCategory)) {
+        switch (RenderCategory(*m_RenderList.RootCategory)) {
         case RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED: {
-            m_HooksList.Builder.UpdateCategory(*m_HooksList.RootCategory);
+            m_RenderList.Builder.UpdateCategory(*m_RenderList.RootCategory);
             break;
         }
         case RenderCategoryResult::SKIPPED_FILTERED: {
@@ -524,8 +524,8 @@ void HooksDebugModule::RenderWindow() {
         return;
     }
 
-    if (!m_HooksList.RootCategory) {
-        m_HooksList.RootCategory = m_HooksList.Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
+    if (!m_RenderList.RootCategory) {
+        m_RenderList.RootCategory = m_RenderList.Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
     }
 
     UpdateSlideSetterMode();
