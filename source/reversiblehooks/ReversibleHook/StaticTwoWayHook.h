@@ -1,9 +1,7 @@
 #pragma once
 
 #include <Base.h>
-#include <optional>
 
-#include <reversiblehooks/HookConstants.hpp>
 #include "StaticOneWayHook.h"
 #include "TwoWayHook.h"
 

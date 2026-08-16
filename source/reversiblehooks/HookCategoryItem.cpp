@@ -1,9 +1,15 @@
 #include "StdInc.h"
 
-#include <fstream>
+#include <cassert>
+#include <filesystem>
+#include <format>
+
+#include <Base.h>
 
 #include "HookCategory.h"
 #include "HookCategoryItem.h"
+#include "ReversibleHook/Enums/TwoWayHookState.h"
+#include "ReversibleHook/TwoWayHook.h"
 
 namespace ReversibleHooks {
 bool HookCategoryItem::SetState(HookState state, bool ignoreLock) {
@@ -18,28 +24,15 @@ bool HookCategoryItem::SetState(HookState state, bool ignoreLock) {
     m_PrevState = prev;
     return true;
 }
-
-const char* HookCategoryItem::GetTypeSymbolUI() noexcept {
-    using enum ReversibleHook::HookType;
-    switch (GetType()) {
-    case StaticTwoWay:      return "S";
-    case Virtual:           return "V";
-    case VirtualDestructor: return "VD";
-    case VMTRedirect:       return "VR";
-    default:                return "U";
+void to_json(json& j, const HookCategoryItem& item) {
+    to_json(j, *item.GetHook());
+    if (const auto category = item.m_Category.lock()) {
+        j["Category"] = category->Name();
+    } else {
+        j["Category"] = nullptr;
     }
-}
-
-void HookCategoryItem::PrintToCSV(std::ofstream& of, const HookCategory& cat) const noexcept {
-    std::println(
-        of,
-        "{},{},0x{:08X},{},{},{}",
-        cat.Name(),
-        m_Hook->Name(),
-        LOG_PTR(GetHookAddressGTA()),
-        !!m_IsReversed,
-        !!m_IsStateLocked,
-        EnumToString(m_Hook->Type()).value_or("Unknown")
-    );
+    j["IsLocked"]              = item.GetIsStateLocked();
+    j["IsReversed"]            = item.m_IsReversed;
+    j["InstallSourceLocation"] = std::format("{}:{}", fs::relative(item.m_InstallSrcLoc.file_name(), notsa::GetSourceCodeBasePath()).generic_string(), item.m_InstallSrcLoc.line());
 }
 }; // namespace ReversibleHooks

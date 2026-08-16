@@ -68,13 +68,16 @@ typedef uint32    bool32;
 #include <winuser.h>
 
 namespace notsa {
-static const fs::path SOURCE_PATH = fs::path(__FILE__).parent_path();
+/*!
+ * @return Return source code's base path
+ */
+fs::path GetSourceCodeBasePath();
 
 template<typename... Ts>
 [[noreturn]] static void unreachable(std::string_view method, std::string_view file, unsigned line, std::string userDetails = "<None provided>") {
     const auto mbMsg = std::format(
         "File: {}\nIn: {}:{}\n\nDetails:\n{}",
-        fs::relative(file, SOURCE_PATH).string(),
+        fs::relative(file, GetSourceCodeBasePath()).string(),
         method,
         line,
         userDetails

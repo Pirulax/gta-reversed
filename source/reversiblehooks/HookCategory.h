@@ -1,14 +1,8 @@
 #pragma once
 
-#include <ranges>
-#include <array>
-#include <list>
 #include <string>
 #include <algorithm>
 #include <memory>
-
-#include <extensions/utility.hpp>
-#include <TristateCheckbox.h>
 
 #include "ReversibleHooks.h"
 #include "HookCategoryItem.h"
@@ -16,95 +10,79 @@
 namespace rng = std::ranges;
 
 namespace ReversibleHooks {
-
-
 class HookCategory : public std::enable_shared_from_this<HookCategory> {
 public:
-    using UIState = ImGui::ImTristate; // Don't really want to deal with enum conversions so this should do.
-    using HookState = ReversibleHook::TwoWayHookState;
-
-    enum class eOverallState {
-        None,
-        Mixed,
-
-    };
-
+    using HookState        = ReversibleHook::TwoWayHookState;
     using CommonItemsState = std::optional<HookState>;
-    
-    // bool IsSame
-    // State CommonState
-
-    //enum class HooksState {
-    //    ALL  = 1, // All GetState
-    //    NONE = 0, // None GetState
-    //    SOME = -1 // Some GetState
-    //};
 
 public:
     HookCategory(std::string name, std::shared_ptr<HookCategory> parent) :
-        m_name{ std::move(name) },
-        m_parent{ parent }
+        m_Name{ std::move(name) },
+        m_Parent{ parent }
     {
     }
 
-    // Accessors
-    auto OverallState()         const { return m_CommonAllItemsState; }
-    bool HasAnyUnhooked() const noexcept { return m_AnyOurItemsUnhooked || m_AnySubItemsUnhooked; }
+    HookCategory(const HookCategory&) = delete;
+    HookCategory& operator=(const HookCategory&) = delete;
 
-    auto ItemsState()           const { return m_CommonOurItemsState; }
+    const auto& Name()          const { return m_Name; }
                                 
-    auto SubcategoriesState()   const { return m_CommonSubItemsState; }
+    const auto& SubCategories() const { return m_SubCategories; }
+    auto&       SubCategories()       { return m_SubCategories; }
                                 
-    const auto& Name()          const { return m_name; }
+    const auto& Items()         const { return m_Items; }
+    auto&       Items()               { return m_Items; }
                                 
-    const auto& SubCategories() const { return m_subCategories; }
-    auto&       SubCategories()       { return m_subCategories; }
-                                
-    const auto& Items()         const { return m_items; }
-    auto&       Items()               { return m_items; }
-                                
-    auto Parent()               const { return m_parent; }
+    auto Parent()               const { return m_Parent; }
 
-    bool Visible()              const { return m_isVisible; }
-    void Visible(bool visible)        { m_isVisible = visible; }
-
-    bool Open()                 const { return m_isOpen; }
-    void Open(bool open)              { m_isOpen = open; }
-
-    bool IsEmpty() const noexcept { return m_items.empty() && m_subCategories.empty(); }
+    bool IsEmpty() const noexcept { return m_Items.empty() && m_SubCategories.empty(); }
 
     //! Add one item to this category (Deal with possible state change)
-    void AddItem(HookCategoryItem item) {
-        assert(!FindItem(item.GetName()) && "Category already contains an item with such name");
-
-        m_items.emplace_back(std::make_shared<HookCategoryItem>(std::move(item)));
+    void AddItem(std::shared_ptr<HookCategoryItem> item) {
+        assert(!FindItem(item->GetName()) && "Category already contains an item with such name");
+        item->SetCategory(shared_from_this());
+        m_Items.emplace_back(std::move(item));
     }
 
     //! Find item by name (function name)
     std::shared_ptr<HookCategoryItem> FindItem(std::string_view name) {
-        const auto it = rng::find_if(m_items, [&](const auto& c) { return c->GetName() == name; });
-        return it == m_items.end() 
+        const auto it = rng::find_if(m_Items, [&](const auto& c) { return c->GetName() == name; });
+        return it == m_Items.end() 
             ? nullptr 
             : *it;
     }
 
     //! Find subcategory by name (Only checks for direct sub categories [No recursion])
-    std::shared_ptr<HookCategory> FindSubcategory(std::string_view name) {
-        const auto it = rng::find_if(m_subCategories, [&](const auto& c) { return c->Name() == name; });
-        return it == m_subCategories.end() 
-            ? nullptr 
-            : *it;
+    std::shared_ptr<HookCategory> FindCategoryByName(std::string_view name, bool create = false) {
+        const auto it = rng::find_if(m_SubCategories, [&](const auto& c) { return c->Name() == name; });
+        if (it != m_SubCategories.end()) {
+            return *it;
+        }
+        if (create) {
+            return m_SubCategories.emplace_back(
+                std::make_shared<HookCategory>(std::string{ name }, shared_from_this())
+            );
+        }
+        return nullptr;
     }
 
-    //! Find subcategory by name - Only checks for top-level children
-    //! If none found a sub-category will be created with the given name.
-    std::shared_ptr<HookCategory> FindOrCreateSubcategory(std::string_view name) {
-        if (auto cat = FindSubcategory(name)) {
+    /*!
+     * @brief Find category by path, optionally creating all categories in the path that don't exist
+     * @param path A `/` separated category list - Eg.: `Entity/Ped` (The hook should be added to the `Entity` category's `Ped` sub-category)
+     * @param create If true, will create the category if it doesn't exist
+     */
+    std::shared_ptr<HookCategory> FindCategoryByPath(std::string_view path, bool create = false) {
+        auto cat = shared_from_this();
+        if (path == Name()) {
             return cat;
         }
-        return m_subCategories.emplace_back(
-            std::make_shared<HookCategory>(std::string{ name }, shared_from_this())
-        ); 
+        for (auto part : path | rngv::split('/')) {
+            cat = cat->FindCategoryByName(std::string_view{ part }, create);
+            if (!create && !cat) {
+                return nullptr; // Not found
+            }
+        }
+        return cat;
     }
 
     //! Iterates over all items, including those in all subcategories
@@ -112,10 +90,10 @@ public:
     //!       (Underlaying storages are vectors, which don't like being modifies while they're being iterated over)
     template<typename Fn>
     void ForEachItem(Fn&& fn) {
-        for (const auto item : m_items) {
+        for (const auto item : m_Items) {
             std::invoke(fn, *item);
         }
-        for (const auto cat : m_subCategories) {
+        for (const auto cat : m_SubCategories) {
             cat->ForEachItem(fn);
         }
     }
@@ -128,7 +106,7 @@ public:
     template<typename Fn>
     void ForEachCategory(Fn&& fn) {
         std::invoke(fn, *this);
-        for (const auto cat : m_subCategories) {
+        for (const auto cat : m_SubCategories) {
             cat->ForEachCategory(fn);
         }
     }
@@ -142,26 +120,10 @@ public:
         return numSubCatOrder; // Order by no. of sub-categories
     }
 
-public:
-    std::optional<HookState> m_LastSetAllState{};     //!< Used by the UI when OverallState is mixed to decide what the next state should be
-    std::optional<HookState> m_LastSetOurState{};     //!< Used by the UI when ItemsState is mixed to decide what the next state should be
-    CommonItemsState         m_CommonOurItemsState{}; //!< Common state of all items, or nullopt if they differ (Mixed)
-    CommonItemsState         m_CommonSubItemsState{}; //!< Common state of all sub-categorie's items, or nullopt if they differ (Mixed)
-    CommonItemsState         m_CommonAllItemsState{}; //!< Common state of all items and sub-categories, or nullopt if they differ (Mixed)
-    bool                     m_AnyOurItemsUnhooked{ false };
-    bool                     m_AnySubItemsUnhooked{ false };
-    bool                     m_AnyItemsUnhooked{ false }; // True if any of our items or sub-categories' items are unhooked
-    bool                     m_isVisible{ true };       // Updated each time the search box is updated. Indicates whenever we should be visible in the GUI.
-    bool                     m_isOpen{};                // Is our tree currently open
-    bool                     m_triStateToggle{};        // Used by the UI when m_overallState is mixed to decide what the next state should be
-    bool                     m_anyItemsVisible{ true }; // Used when searching
-    bool                     m_allCatsDisabled{ true }; // Are all owned sub-categories disabled
-    bool                     m_AllItemsLocked{ true };  // Are all owned items disabled
-
 private:
-    std::weak_ptr<HookCategory>                    m_parent{};        // Category we belong to - In case of `RootHookCategory` this is always `nullptr`.
-    std::string                                    m_name{};          // Name of this category (Eg.: `Root`, `Global`, `Entity`, etc...)
-    std::vector<std::shared_ptr<HookCategory>>     m_subCategories{}; // Subcategories - It has to be a list, because we have links between categories
-    std::vector<std::shared_ptr<HookCategoryItem>> m_items{};         // Hooks in this category (`RootCategory` should have none)
+    std::weak_ptr<HookCategory>                    m_Parent{};        //!< Category we belong to - In case of `RootHookCategory` this is always `nullptr`.
+    std::string                                    m_Name{};          //!< Name of this category (Eg.: `Root`, `Global`, `Entity`, etc...)
+    std::vector<std::shared_ptr<HookCategory>>     m_SubCategories{}; //!< Subcategories
+    std::vector<std::shared_ptr<HookCategoryItem>> m_Items{};         //!< Hooks in this category (`RootCategory` should have none)
 };
-}; // namespace ReversibleHooks 
+}; // namespace ReversibleHooks

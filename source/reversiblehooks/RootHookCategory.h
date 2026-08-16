@@ -19,22 +19,6 @@ public:
         HookCategory{ GetRootName(), std::shared_ptr<HookCategory>{nullptr} } // Root has no parent
     {
     }
-
-    RootHookCategory(const RootHookCategory&) = delete;
-    RootHookCategory(RootHookCategory&&)      = delete; 
-
-    // @categoryList - A `/` separated category list - Eg.: `Entity/Ped` (The hook should be added to the `Entity` category's `Ped` sub-category)
-    void AddItemToNamedCategory(std::string_view categoryList, HookCategoryItem hook) {
-        assert(!categoryList.empty()); // Should never be empty. To add to global category use `RH_ScopedCategoryGlobal()`
-
-        auto cat = shared_from_this();
-        for (auto&& catName : SplitStringView(categoryList, "/")) {
-            cat = cat->FindOrCreateSubcategory(catName);
-        }
-
-        assert(cat.get() != this); // Make sure item doesn't get added into us (As the root category should have no items)
-        cat->AddItem(std::move(hook)); // The last category is where we add the item to
-    }
 };
 
 }; // namespace ReversibleHooks 

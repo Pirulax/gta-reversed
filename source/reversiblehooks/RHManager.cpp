@@ -47,6 +47,27 @@ void RHManager::CheckAll() {
     }
 }
 
+void RHManager::WriteHooksToFile(const std::filesystem::path& file) {
+    const auto path = std::filesystem::weakly_canonical(file);
+    if (std::ofstream of{ file }) {
+        json::array_t arr;
+        [&](this auto&& Self, const HookCategory& c) -> void {
+            for (const auto item : c.Items()) {
+                json j{};
+                to_json(j, *item);
+                arr.emplace_back(std::move(j));
+            }
+            for (const auto subcat : c.SubCategories()) {
+                Self(*subcat);
+            }
+        }(*GetRootCategory());
+        of << arr;
+        NOTSA_LOG_INFO("Hooks written to `{}`", path.string());
+    } else {
+        NOTSA_LOG_ERR("Failed to open file `{}` for writing hooks!", path.string());
+    }
+}
+
 void RHManager::InstallVirtual(
     std::string_view   category,
     std::string        fnName,
@@ -74,42 +95,23 @@ void RHManager::InstallVirtual(
     }
 }
 
-void RHManager::AddHookToCategory(std::string_view category, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook) {
-    GetRootCategory()->AddItemToNamedCategory(category, {
+void RHManager::AddHookToCategory(std::string_view path, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook) {
+    GetRootCategory()->FindCategoryByPath(path, true)->AddItem(std::make_shared<HookCategoryItem>(
         std::move(hook),
         opt.Locked,
         opt.Reversed,
         opt.State,
         opt.InstallSrcLoc
-    });
+    ));
 }
 
 #ifdef NOTSA_WITH_SCRIPT_COMMAND_HOOKS
-void RHManager::InstallScriptCommand(std::string_view category, eScriptCommands cmd, HookInstallOptions opt) {
+void RHManager::InstallScriptCommand(std::string_view path, eScriptCommands cmd, HookInstallOptions opt) {
     AddHookToCategory(
-        category,
+        path,
         opt,
         std::make_shared<::ReversibleHooks::ReversibleHook::ScriptCommandHook>(cmd)
     );
 }
 #endif
-
-void RHManager::WriteHooksToFile(const std::filesystem::path& file) {
-    const auto path = std::filesystem::weakly_canonical(file);
-    if (std::ofstream of{ file }) {
-        of << "class,fn_name,address,reversed,locked,type\n";
-        GetRootCategory()->ForEachCategory([&] (const HookCategory& cat) {
-            using namespace ReversibleHook;
-            for (const auto& item : cat.Items()) {
-                if (item->GetType() == HookType::ScriptCommand) {
-                    continue;
-                }
-                item->PrintToCSV(of, cat);
-            }
-        });
-        NOTSA_LOG_INFO("Hooks written to `{}`", path.string());
-    } else {
-        NOTSA_LOG_ERR("Failed to open file `{}` for writing hooks!", path.string());
-    }
-}
 }; // namespace ReversibleHooks

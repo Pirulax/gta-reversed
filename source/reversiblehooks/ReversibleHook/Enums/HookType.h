@@ -1,5 +1,7 @@
 #pragma once
 
+#include <Base.h>
+
 namespace ReversibleHooks {
 namespace ReversibleHook {
 /*!
@@ -13,9 +15,16 @@ enum class HookType {
     ScriptCommand,
     VMTRedirect,
 };
+NLOHMANN_JSON_SERIALIZE_ENUM(HookType, {
+    { HookType::StaticOneWay,      "STATIC_ONE_WAY"     },
+    { HookType::StaticTwoWay,      "STATIC_TWO_WAY"     },
+    { HookType::Virtual,           "VIRTUAL"            },
+    { HookType::VirtualDestructor, "VIRTUAL_DESTRUCTOR" },
+    { HookType::ScriptCommand,     "SCRIPT_COMMAND"     },
+    { HookType::VMTRedirect,       "VMT_REDIRECT"       }
+});
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
-
 
 inline std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::HookType t) {
     using enum ReversibleHooks::ReversibleHook::HookType;
@@ -28,4 +37,3 @@ inline std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::
     default:            return std::nullopt;
     }
 }
-

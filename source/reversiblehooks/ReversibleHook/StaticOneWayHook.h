@@ -1,7 +1,6 @@
 #pragma once
 
-#include <Base.h>
-
+#include <reversiblehooks/HookConstants.hpp>
 #include "OneWayHook.h"
 
 namespace ReversibleHooks {

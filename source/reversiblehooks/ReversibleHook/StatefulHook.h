@@ -4,9 +4,6 @@
 
 #include <atomic>
 
-#include "Enums/HookMode.h"
-#include "Enums/HookType.h"
-
 #include "Hook.h"
 
 namespace ReversibleHooks {
@@ -35,6 +32,7 @@ public:
     }
 
     auto State() const noexcept { return m_State.load(); }
+    void Serialize(json& j) const override { to_json(j, *this); }
 
 protected:
     /*!
@@ -43,6 +41,12 @@ protected:
      * @param state The new state to apply
      */
     virtual void ApplyNewState(StateType state, StateType oldState) = 0;
+
+public:
+    friend void to_json(json& j, const StatefulHook& hook) {
+        to_json(j, static_cast<const Hook&>(hook));
+        j["State"] = hook.State();
+    }
 
 protected:
     std::atomic<StateType> m_State{}; //!< Really only atomic so that when filtering in the separate UI filter thread we don't get a random value

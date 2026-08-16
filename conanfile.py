@@ -13,15 +13,13 @@ class saRecipe(ConanFile):
 
     requires = [
         "ogg/1.3.5",
-        "nlohmann_json/3.11.3",
+        "nlohmann_json/3.12.0",
         "spdlog/1.15.0",
         "tracy/0.13.1",
         "vorbis/1.3.7",
         "imgui/1.91.5-docking",
         "sdl/3.2.6",
-        "libjpeg-turbo/3.1.0",
-        "boost/1.91.0",
-        "rapidfuzz/3.3.3"
+        "libjpeg-turbo/3.1.0"
     ]
 
     default_options = {

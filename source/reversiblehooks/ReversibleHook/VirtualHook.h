@@ -1,15 +1,10 @@
 #pragma once
 
-#include "Base.h" 
-
-#include <vector>
-#include <string>
+#include <Base.h>
 
 #include "TwoWayHook.h"
 #include "StaticTwoWayHook.h"
 #include "VMTRedirectHook.h"
-
-#include <reversiblehooks/VMTInfo.h>
 
 namespace ReversibleHooks {
 namespace ReversibleHook {

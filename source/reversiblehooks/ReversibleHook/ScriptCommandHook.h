@@ -26,6 +26,7 @@ struct ScriptCommandHook final : public TwoWayHook {
 
     HookType Type() const noexcept override { return HookType::ScriptCommand; }
     void     Check() override { /* nop */ }
+    void     Serialize(json& j) const override { to_json(j, *this); }
 
     void* GetHookAddressGTA() const noexcept override { return m_OriginalHandler; }
     void* GetHookAddressOur() const noexcept override { return CRunningScript::CustomCommandHandlerOf(m_Command); }
@@ -35,6 +36,12 @@ protected:
         CRunningScript::CustomCommandHandlerOf(m_Command) = state == TwoWayHookState::RedirectToOurs
             ? m_OriginalHandler 
             : nullptr;
+    }
+
+public:
+    friend void to_json(json& j, const ScriptCommandHook& hook) {
+        to_json(j, static_cast<const TwoWayHook&>(hook));
+        j["Command"] = ::notsa::script::GetScriptCommandName(hook.m_Command);
     }
 
 private:

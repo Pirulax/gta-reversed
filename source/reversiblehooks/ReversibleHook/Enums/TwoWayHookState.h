@@ -6,7 +6,14 @@ enum class TwoWayHookState {
     Unhooked,
     RedirectToGTA,
     RedirectToOurs,
+
+    Count
 };
+NLOHMANN_JSON_SERIALIZE_ENUM(TwoWayHookState, {
+    { TwoWayHookState::Unhooked,       "UNHOOKED"         },
+    { TwoWayHookState::RedirectToGTA,  "REDIRECT_TO_GTA"  },
+    { TwoWayHookState::RedirectToOurs, "REDIRECT_TO_OURS" },
+});
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
 

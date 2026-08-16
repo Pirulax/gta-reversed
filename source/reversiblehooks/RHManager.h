@@ -1,13 +1,18 @@
 #pragma once
 
 #include <chrono>
-#include <format>
 #include <string_view>
 #include <optional>
 #include <source_location>
 #include <string>
+#include <algorithm>
+#include <bit>
+#include <cstdarg>
+#include <filesystem>
+#include <memory>
+#include <stdexcept>
+#include <utility>
 
-#include <Base.h>
 #include <extensions/Singleton.hpp>
 #include <Enums/eScriptCommands.h>
 
@@ -16,6 +21,9 @@
 #include "ReversibleHook/TwoWayHook.h"
 #include "ReversibleHook/VirtualDestructorHook.h"
 #include "ReversibleHook/StaticTwoWayHook.h"
+#include "ReversibleHook/Enums/TwoWayHookState.h"
+#include "VMTInfo.h"
+
 
 namespace ReversibleHooks {
 class RHManager : public notsa::Singleton<RHManager> {
@@ -93,19 +101,19 @@ public: // Script hooking functions //
 
     /*!
      * @brief Adds a hook to a category
-     * @param category Category path (Eg.: "Global/Entity/Ped")
+     * @param path Category path (Eg.: "Global/Entity/Ped")
      * @param opt Hook installation options
      */
     void AddHookToCategory(
-        std::string_view category,
-        HookInstallOptions opt,
+        std::string_view                            path,
+        HookInstallOptions                          opt,
         std::shared_ptr<ReversibleHook::TwoWayHook> hook
     );
 
     /*!
      * @brief Installs a hook for a static function.
      * @tparam T Function type
-     * @param category Category path (Eg.: "Global/Entity/Ped")
+     * @param path Category path (Eg.: "Global/Entity/Ped")
      * @param fnName Name of the function (Eg.: "SetHealth")
      * @param addressGTA Address of function in GTA code
      * @param addressOur Address of function in our code
@@ -113,7 +121,7 @@ public: // Script hooking functions //
      */
     template <typename T>
     void InstallStatic(
-        std::string_view   category,
+        std::string_view   path,
         std::string        fnName,
         uintptr_t          addressGTA,
         T                  fnOur,
@@ -121,9 +129,9 @@ public: // Script hooking functions //
     ) {
         // If `PreserveRegisters` then `StackArgumentsToPreserve` may be 0, we just want to enforce it to be set to prevent bugs
         if (opt.PreserveRegisters && !opt.StackArgumentsToPreserve.has_value()) {
-            throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", category, fnName));
+            throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", path, fnName));
         }
-        AddHookToCategory(category, opt, std::make_shared<ReversibleHook::StaticTwoWayHook>(
+        AddHookToCategory(path, opt, std::make_shared<ReversibleHook::StaticTwoWayHook>(
             std::move(fnName),
             Utility::FunctionToVoidPtr(fnOur),
             std::bit_cast<void*>(addressGTA),
@@ -134,7 +142,7 @@ public: // Script hooking functions //
 
     /*!
      * @brief Installs a hook for a virtual function of a class T.
-     * @param category Category path (Eg.: "Global/Entity/Ped")
+     * @param path Category path (Eg.: "Global/Entity/Ped")
      * @param fnName Name of the function (Eg.: "SetHealth")
      * @param vmtInfoOur Class's VMT info on our side
      * @param fnAddressOur Address of our function to call
@@ -143,7 +151,7 @@ public: // Script hooking functions //
      * @param opt Hook installation options
      */
     void InstallVirtual(
-        std::string_view   category,
+        std::string_view   path,
         std::string        fnName,
         Utility::VMTInfo   vmtInfoOur,
         void*              fnAddressOur,
@@ -156,14 +164,14 @@ public: // Script hooking functions //
      * @brief Installs a hook for a constructor of a class T.
      * @tparam T The class
      * @tparam ...Args Constructor arguments (If such constructor doesn't exist the compiler will complain)
-     * @param category Category path
+     * @param path Category path
      * @param suffix Suffix to append to the hook name
      * @param addressGTA Address of the constructor in GTA
      * @param opt Hook installation options
      */
     template<typename T, typename... Args>
     void InstallConstructor(
-        std::string_view   category,
+        std::string_view   path,
         std::string_view   suffix,
         uintptr_t          addressGTA,
         HookInstallOptions opt = {}
@@ -173,7 +181,7 @@ public: // Script hooking functions //
             name += "-" + std::string(suffix);
         }
         InstallStatic(
-            category,
+            path,
             std::move(name),
             addressGTA,
             Utility::GetConstructorAddress<T, Args...>(),
@@ -184,7 +192,7 @@ public: // Script hooking functions //
     /*!
      * @brief Installs a hook for a virtual destructor of a class T.
      * @tparam T The class
-     * @param category Category path
+     * @param path Category path
      * @param vmtInfoOur class's VMT in our code
      * @param vmtInfoGTA class's VMT in GTA
      * @param addressGTA Address of the virtual (scalar) destructor in GTA
@@ -192,13 +200,13 @@ public: // Script hooking functions //
      */
     template <typename T>
     void InstallVirtualDestructor(
-        std::string_view   category,
+        std::string_view   path,
         Utility::VMTInfo   vmtInfoOur,
         Utility::VMTInfo   vmtInfoGTA,
         uintptr_t          addressGTA,
         HookInstallOptions opt = {}
     ) {
-        AddHookToCategory(category, category, std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
+        AddHookToCategory(path, opt, std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
             vmtInfoOur,
             vmtInfoGTA,
             (void*)(addressGTA)
@@ -207,11 +215,11 @@ public: // Script hooking functions //
 
     /*!
      * @brief Hook a script command
-     * @param category Category's path, eg.: "Global/"
+     * @param path Category's path, eg.: "Global/"
      * @param cmd     Script command to hook
      */
     void InstallScriptCommand(
-        std::string_view   category,
+        std::string_view   path,
         eScriptCommands    cmd,
         HookInstallOptions opt = {}
     );

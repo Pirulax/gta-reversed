@@ -37,7 +37,7 @@ std::array<std::array<char, COMMANDS_CHAR_BUFFER_SIZE>, COMMANDS_CHAR_BUFFERS_CO
 uint8                                                                                CRunningScript::ScriptArgCharNextFreeBuffer = 0;
 
 void CRunningScript::InjectHooks() {
-    //logger = NOTSA_MAKE_LOGGER("script");
+    logger = NOTSA_MAKE_LOGGER("script");
 
     InjectCustomCommandHooks();
 

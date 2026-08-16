@@ -14,6 +14,7 @@ public:
     using StatefulHook::StatefulHook;
 
     HookMode Mode() const noexcept final { return HookMode::OneWay; }
+    void     Serialize(json& j) const override { NOTSA_UNREACHABLE("No support for serialization"); } // We don't need it for these classes, they're internal
 };
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
