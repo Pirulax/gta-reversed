@@ -1,9 +1,9 @@
 #include "StdInc.h"
 
-#include "HooksFilterListStep.h"
+#include "RListFilterer.h"
 
 namespace RHDebugModule {
-void HooksFilterListStep::Process(StepsCategory& root) const noexcept {
+void RListFilterer::Process(RListCategory& root) const noexcept {
     ZoneScoped;
 
     // NB: Always run category filtering first, because item filtering depends on category scores to determine if it should filter items or not
@@ -26,7 +26,7 @@ void HooksFilterListStep::Process(StepsCategory& root) const noexcept {
     CalculateCategoryMaxScores(root);
 }
 
-float HooksFilterListStep::CalculateCategoryScoresByName(StepsCategory& cat) const noexcept {
+float RListFilterer::CalculateCategoryScoresByName(RListCategory& cat) const noexcept {
     cat.FilterScore = m_Filter.MatchCategoryByName(cat.Category->Name());
     if (cat.Categories.IsEmpty()) {
         cat.MaxFilterScoreSubCats = std::nullopt;
@@ -39,7 +39,7 @@ float HooksFilterListStep::CalculateCategoryScoresByName(StepsCategory& cat) con
     return std::max(cat.MaxFilterScoreSubCats.value_or(0.f), *cat.FilterScore);
 }
 
-float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, const StepsCategory* parent, HookFilter::CategoryPath& ns, size_t depth) const noexcept {
+float RListFilterer::CalculateCategoryScoresByPath(RListCategory& cat, const RListCategory* parent, HookFilter::CategoryPath& ns, size_t depth) const noexcept {
     cat.FilterScore           = m_Filter.MatchCategoryByPath(ns, depth);
     cat.MaxFilterScoreSubCats = std::nullopt;
 
@@ -59,12 +59,12 @@ float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, con
     return std::max(cat.MaxFilterScoreSubCats.value_or(0.f), *cat.FilterScore);
 }
 
-float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat) const noexcept {
+float RListFilterer::CalculateCategoryScoresByPath(RListCategory& cat) const noexcept {
     HookFilter::CategoryPath ns = { cat.Category->Name() };
     return CalculateCategoryScoresByPath(cat, nullptr, ns, 0);
 }
 
-void HooksFilterListStep::SetCategoryUnfilteredCategoryScores(StepsCategory& cat) const noexcept {
+void RListFilterer::SetCategoryUnfilteredCategoryScores(RListCategory& cat) const noexcept {
     cat.FilterScore           = std::nullopt;
     cat.MaxFilterScoreSubCats = std::nullopt;
     for (auto& sc : cat.Categories) {
@@ -72,7 +72,7 @@ void HooksFilterListStep::SetCategoryUnfilteredCategoryScores(StepsCategory& cat
     }
 }
 
-std::optional<float> HooksFilterListStep::CalculateCategoryItemsScore(StepsCategory& cat, bool onlyIfCategoryHasScore) const noexcept {
+std::optional<float> RListFilterer::CalculateCategoryItemsScore(RListCategory& cat, bool onlyIfCategoryHasScore) const noexcept {
     // NB: For this to work properly category scores must first be calculated!
     if (onlyIfCategoryHasScore != (std::max(cat.MaxFilterScoreSubCats, cat.FilterScore).value_or(0.f) > 0.f)) {
         SetCategoryUnfilteredItemsScore(cat);
@@ -104,7 +104,7 @@ std::optional<float> HooksFilterListStep::CalculateCategoryItemsScore(StepsCateg
     return cat.MaxScoreAllItems;
 }
 
-void HooksFilterListStep::SetCategoryUnfilteredItemsScore(StepsCategory& cat) const noexcept {
+void RListFilterer::SetCategoryUnfilteredItemsScore(RListCategory& cat) const noexcept {
     cat.MaxFilterScoreOwnItems = std::nullopt;
     cat.MaxFilterScoreSubItems = std::nullopt;
     cat.MaxScoreAllItems       = std::nullopt;
@@ -115,7 +115,7 @@ void HooksFilterListStep::SetCategoryUnfilteredItemsScore(StepsCategory& cat) co
         SetCategoryUnfilteredItemsScore(sc);
     }
 }
-void HooksFilterListStep::CalculateCategoryMaxScores(StepsCategory& cat) const noexcept {
+void RListFilterer::CalculateCategoryMaxScores(RListCategory& cat) const noexcept {
     cat.MaxFilterScore = std::max({cat.MaxFilterScoreSubCats, cat.MaxScoreAllItems, cat.FilterScore});
     for (auto& sc : cat.Categories) {
         CalculateCategoryMaxScores(sc);

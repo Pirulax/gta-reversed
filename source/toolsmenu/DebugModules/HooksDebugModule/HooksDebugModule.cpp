@@ -17,8 +17,8 @@
 #include "Utility.h"
 #include "HooksDebugModule.h"
 
-#include "HooksFilterListStep.h"
-#include "HooksSortListStep.hpp"
+#include "RListFilterer.h"
+#include "RListSorter.hpp"
 
 using namespace RHDebugModule;
 using namespace ImGui;
@@ -50,8 +50,8 @@ void HooksDebugModule::FilteringThread() {
         /* Hold lock until we finish */
         NOTSA_LOG_DEBUG("Running filter");
         const auto now = FilterClock::now();
-        HooksFilterListStep{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_HooksList.RootCategory);
-        HooksSortListStep{}.Process(*m_HooksList.RootCategory);
+        RListFilterer{ std::move(m_FilterProcessor.HookFilter) }.Process(*m_HooksList.RootCategory);
+        RListSorter{}.Process(*m_HooksList.RootCategory);
         m_FilterProcessor.FinishedAt        = FilterClock::now();
         m_FilterProcessor.NeedToAckFinished = true;
     }
@@ -263,7 +263,7 @@ void HooksDebugModule::RenderMenuBar() {
     }
 }
 
-bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
+bool HooksDebugModule::RenderCategoryItems(RListCategory& cat) {
     if (!IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems)) {
         return false;
     }
@@ -323,7 +323,7 @@ bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
 }
 
 
-auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResult {
+auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResult {
     if (!cat.Items.IsEmpty() && !cat.Categories.IsEmpty()) {
         return RenderCategoryResult::SKIPPED_NOTHING_TO_SHOW;
     }
@@ -373,14 +373,14 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
         return open;
     };
     
-    const auto SetCategoryOwnItemsState = [&](StepsCategory& c, HookState state) {
-        return rng::fold_left(c.Items, false, [state](bool changed, StepsItem& item) {
+    const auto SetCategoryOwnItemsState = [&](RListCategory& c, HookState state) {
+        return rng::fold_left(c.Items, false, [state](bool changed, RListCategoryItem& item) {
             return item.Ptr->SetState(state) | changed;
         });
     };
 
-    const auto RestoreCategoryOwnItemsState = [&](StepsCategory& c) {
-        return rng::fold_left(c.Items, false, [](bool changed, StepsItem& item) {
+    const auto RestoreCategoryOwnItemsState = [&](RListCategory& c) {
+        return rng::fold_left(c.Items, false, [](bool changed, RListCategoryItem& item) {
             return item.Ptr->SetToPreviousState() | changed;
         });
     };
@@ -412,7 +412,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             : HookState::RedirectToOurs,
         [&] (HookState state) -> bool {
             cat.LastSetAllItemsState = state;
-            return [&, state](this auto&& Self, StepsCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
+            return [&, state](this auto&& Self, RListCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
                 bool changed = SetCategoryOwnItemsState(c, state);
                 for (auto& sc : c.Categories) {
                     changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);
@@ -421,7 +421,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             }(cat);
         },
         [&] () -> bool {
-            return [&](this auto&& Self, StepsCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
+            return [&](this auto&& Self, RListCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
                 bool changed = RestoreCategoryOwnItemsState(c);
                 for (auto& sc : c.Categories) {
                     changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);

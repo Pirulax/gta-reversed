@@ -16,30 +16,36 @@ inline bool IsMatchingScoreOrNone(const std::optional<float>& score, float cutof
     return !score.has_value() || *score > cutoff;
 }
 
-struct StepsItem : ListItem_c<StepsItem> {
-    std::optional<float>                               FilterScore{};
-    std::shared_ptr<ReversibleHooks::HookCategoryItem> Ptr{};
+struct RListCategoryItem : ListItem_c<RListCategoryItem> {
+    std::optional<float>                               FilterScore{}; //!< Filter score of this item
+    std::shared_ptr<ReversibleHooks::HookCategoryItem> Ptr{};         //!< Ptr to original item
 };
 
-struct StepsCategory : ListItem_c<StepsCategory> {
-    std::shared_ptr<ReversibleHooks::HookCategory> Category{};
+struct RListCategory : ListItem_c<RListCategory> {
+    std::shared_ptr<ReversibleHooks::HookCategory> Category{}; //!< Ptr to original category
+
     std::optional<float>                           FilterScore{};            //!< Filter score of this category
     std::optional<float>                           MaxFilterScoreSubCats{};  //!< Only score of categories, not including their items
     std::optional<float>                           MaxFilterScoreOwnItems{}; //!< Max score of our items
     std::optional<float>                           MaxFilterScoreSubItems{}; //!< Max score of sub items
-    std::optional<float>                           MaxScoreAllItems{};          //!< Max score of our items and sub items
-    std::optional<float>                           MaxFilterScore{};         //!< max of all of the above
-    bool                                           AnyUnhookedItems{};
-    bool                                           AnyUnhookedOwnItems{};
-    bool                                           AnyUnlockedItems{};
-    bool                                           AnyUnlockedOwnItems{};
+    std::optional<float>                           MaxScoreAllItems{};       //!< Max score of our items and sub items
+    std::optional<float>                           MaxFilterScore{};         //!< Max of all of the above
+
+    bool                                           AnyUnhookedItems{};    //!< Any unhooked (sub-)items?
+    bool                                           AnyUnhookedOwnItems{}; //!< Any unhooked own items?
+
+    bool                                           AnyUnlockedItems{};    //!< Any unlocked (sub-)items?
+    bool                                           AnyUnlockedOwnItems{}; //!< Any unlocked own items?
+
     std::optional<HookState>                       LastSetAllItemsState{};
-    std::optional<HookState>                       LastSetAllItemState{};
+
     CommonState                                    CommonStateAllItems{}; //!< `nullopt` if there's no common state (There should be no categories with no items/sub-categories in this list)
     CommonState                                    CommonStateOwnItems{}; //!< `nullopt` if there's no common state, or no items
     CommonState                                    CommonStateSubItems{}; //!< `nullopt` if there's no common state, or no sub-categories
-    TList_c<StepsItem>                             Items{};
-    TList_c<StepsCategory>                         Categories{};
+
+    TList_c<RListCategoryItem>                     Items{};
+
+    TList_c<RListCategory>                         Categories{};
     size_t                                         NumCategoriesIgnored{}; //!< Number of categories ignored when then list was constructed because they were empty (no items and no sub-categories)
 };
 };

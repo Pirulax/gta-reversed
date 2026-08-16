@@ -1,28 +1,28 @@
 #include "StdInc.h"
 
 #include "HookFilter.h"
-#include "HooksBuildListStep.h"
+#include "RListBuilder.h"
 
 namespace RHDebugModule {
-HooksBuildListStep::HooksBuildListStep(
+RListBuilder::RListBuilder(
     size_t maxItems,
     size_t maxCategories
 ) :
     m_PoolItem{ maxItems },
-    m_PooStepCategory{ maxCategories } {
+    m_PoolCategory{ maxCategories } {
 }
 
-StepsCategory* HooksBuildListStep::ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> from) noexcept {
+RListCategory* RListBuilder::ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> from) noexcept {
     ZoneScoped;
 
-    const auto RecursiveConstruct = [this](this auto& RecursiveConstruct, std::shared_ptr<ReversibleHooks::HookCategory> cat) -> StepsCategory& {
-        StepsCategory* out = new (m_PooStepCategory.New()) StepsCategory{
+    const auto RecursiveConstruct = [this](this auto& RecursiveConstruct, std::shared_ptr<ReversibleHooks::HookCategory> cat) -> RListCategory& {
+        RListCategory* out = new (m_PoolCategory.New()) RListCategory{
             .Category{ std::move(cat) },
         };
 
         for (auto item : out->Category->Items()) {
             out->Items.AppendItem(
-                new (m_PoolItem.New()) StepsItem{
+                new (m_PoolItem.New()) RListCategoryItem{
                     .Ptr{ std::move(item) },
                 }
             );
@@ -47,7 +47,7 @@ StepsCategory* HooksBuildListStep::ConstructList(std::shared_ptr<ReversibleHooks
     return &RecursiveConstruct(std::move(from));
 }
 
-bool HooksBuildListStep::UpdateCategory(StepsCategory& cat) const noexcept {
+bool RListBuilder::UpdateCategory(RListCategory& cat) const noexcept {
     ZoneScoped;
 
     const auto prevAnyUnhookedItems    = std::exchange(cat.AnyUnhookedItems, false);

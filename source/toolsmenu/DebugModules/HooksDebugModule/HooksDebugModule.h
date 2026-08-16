@@ -7,9 +7,9 @@
 #include <toolsmenu/DebugModules/DebugModule.h>
 #include <toolsmenu/TristateCheckbox.h>
 
-#include "HookStepsDefs.h"
+#include "RListDefs.h"
 #include "HookFilter.h"
-#include "HooksBuildListStep.h"
+#include "RListBuilder.h"
 
 namespace ReversibleHooks {
 class HookCategory;
@@ -57,7 +57,7 @@ private:
     void RenderHooksSection();
     void RenderFooter();
 
-    bool RenderCategoryItems(StepsCategory& cat);
+    bool RenderCategoryItems(RListCategory& cat);
     enum class RenderCategoryResult {
         RENDERED,                        //!< Rendered, no changes
         RENDERED_CATEGORY_STATE_CHANGED, //!< Category was rendered, and it's state has changed (due to user interaction) in a way that affects the state of its parent category
@@ -65,7 +65,7 @@ private:
         SKIPPED_FILTERED,                //!< Category has items/sub-categories, but none of them match the filter
         SKIPPED_CLOSED,                  //!< Category's tree node was closed
     };
-    RenderCategoryResult RenderCategory(StepsCategory& cat);
+    RenderCategoryResult RenderCategory(RListCategory& cat);
 
 private:
     bool m_IsOpen{};
@@ -79,7 +79,7 @@ private:
         bool                    Exiting{};
         HookFilter              HookFilter{};
         bool                    NeedToAckFinished{};
-        StepsCategory*          ListToFilter{};
+        RListCategory*          ListToFilter{};
     } m_FilterProcessor{};
 
     struct FilterOptions {
@@ -105,8 +105,8 @@ private:
     } m_SlideSetter{};
 
     struct HookList {
-        HooksBuildListStep Builder;
-        StepsCategory*     RootCategory; //!< Data is owned by the `Builder`
+        RListBuilder Builder;
+        RListCategory*     RootCategory; //!< Data is owned by the `Builder`
     } m_HooksList{};    
 };
 }; // namespace RHDebugModule
