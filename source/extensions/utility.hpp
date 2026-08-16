@@ -389,11 +389,13 @@ template<typename T>
 inline constexpr bool is_standard_integer = std::is_integral_v<T> && !is_any_of_type_v<T, bool, char, wchar_t, char8_t, char16_t, char32_t>;
 
 //! Null terminated `std::format_to`. Use inplace of sprintf.
-//! NOTE: Not a complete replacement for std::format_to,
-//! e.g. it doesn't use output iterators. i don't care.
+//! Returns end of formatted string
+//! Truncates string to at most N - 1 characters
 template<size_t N, class... Args>
-void format_to_sz(char(&out)[N], std::string_view fmt, Args&&... args) {
-    *std::vformat_to(out, fmt, std::make_format_args(args...)) = '\0';
+char* format_to_sz(char(&buf)[N], std::format_string<Args...> fmt, Args&&... args) {
+    const auto [out, n] = std::format_to_n(buf, N - 1, fmt, std::forward<Args>(args)...);
+    *out = 0;
+    return out;
 }
 
 //! Reads a pointer as specified type.
