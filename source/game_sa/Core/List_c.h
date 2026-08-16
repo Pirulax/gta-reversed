@@ -295,10 +295,71 @@ public:
             return;
         }
 
-        m_head = MergeSort(m_head, pred);
+        const auto Merge = [&](T* left, T* right) -> T* {
+            T* head = nullptr;
+            T* tail = nullptr;
 
-        m_tail = m_head;
-        while (m_tail->m_pNext) {
+            const auto Append = [&head, &tail](T* item) {
+                item->m_pPrev = tail;
+                item->m_pNext = nullptr;
+                if (tail) {
+                    tail->m_pNext = item;
+                } else {
+                    head = item;
+                }
+                tail = item;
+            };
+
+            while (left && right) {
+                if (std::invoke(pred, *right, *left)) {
+                    auto* const item = right;
+                    right = right->m_pNext;
+                    Append(item);
+                } else {
+                    auto* const item = left;
+                    left = left->m_pNext;
+                    Append(item);
+                }
+            }
+
+            for (auto* remaining = left ? left : right; remaining;) {
+                auto* const item = remaining;
+                remaining = remaining->m_pNext;
+                Append(item);
+            }
+
+            return head;
+        };
+
+        const auto MergeSort = [&] (this auto&& MergeSort, T* head) -> T* {
+            if (!head || !head->m_pNext) {
+                return head;
+            }
+
+            // Split a list in two, returning the head of the latter half.
+            const auto Split = [] (T* head) -> T* {
+                auto* slow = head;
+                auto* fast = head->m_pNext;
+
+                while (fast && fast->m_pNext) {
+                    slow = slow->m_pNext;
+                    fast = fast->m_pNext->m_pNext;
+                }
+
+                auto* const second = slow->m_pNext;
+                slow->m_pNext = nullptr;
+                second->m_pPrev = nullptr;
+                return second;
+            };
+
+            return Merge(MergeSort(head), MergeSort(Split(head)));
+        };
+
+        // Sort list
+        m_head = MergeSort(m_head);
+
+        // Find new tail
+        for (m_tail = m_head; m_tail->m_pNext;) {
             m_tail = m_tail->m_pNext;
         }
     }
@@ -323,70 +384,6 @@ public:
     auto IsEmpty()        const { return m_head == nullptr; }
 
 private:
-    template<typename Pred>
-    static T* MergeSort(T* head, Pred& pred) {
-        if (!head || !head->m_pNext) {
-            return head;
-        }
-
-        auto* const second = Split(head);
-        return Merge(MergeSort(head, pred), MergeSort(second, pred), pred);
-    }
-
-    // Split a list in two, returning the head of the latter half.
-    static T* Split(T* head) {
-        auto* slow = head;
-        auto* fast = head->m_pNext;
-
-        while (fast && fast->m_pNext) {
-            slow = slow->m_pNext;
-            fast = fast->m_pNext->m_pNext;
-        }
-
-        auto* const second = slow->m_pNext;
-        slow->m_pNext = nullptr;
-        second->m_pPrev = nullptr;
-        return second;
-    }
-
-    // Merge two sorted lists. Equal items remain in their original order.
-    template<typename Pred>
-    static T* Merge(T* left, T* right, Pred& pred) {
-        T* head = nullptr;
-        T* tail = nullptr;
-
-        const auto append = [&head, &tail](T* item) {
-            item->m_pPrev = tail;
-            item->m_pNext = nullptr;
-            if (tail) {
-                tail->m_pNext = item;
-            } else {
-                head = item;
-            }
-            tail = item;
-        };
-
-        while (left && right) {
-            if (std::invoke(pred, *right, *left)) {
-                auto* const item = right;
-                right = right->m_pNext;
-                append(item);
-            } else {
-                auto* const item = left;
-                left = left->m_pNext;
-                append(item);
-            }
-        }
-
-        for (auto* remaining = left ? left : right; remaining;) {
-            auto* const item = remaining;
-            remaining = remaining->m_pNext;
-            append(item);
-        }
-
-        return head;
-    }
-
     T*     m_head{};
     T*     m_tail{};
     size_t m_cnt{};
