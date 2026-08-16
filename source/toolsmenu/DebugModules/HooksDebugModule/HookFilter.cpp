@@ -1,13 +1,9 @@
 #include "StdInc.h"
 #include "Base.h"
-#include <imgui.h>
-#include <libs/imgui/misc/cpp/imgui_stdlib.h>
-#include <boost/static_string.hpp>
 #include <iterator>
-
-
 #include "HookFilter.h"
 
+namespace RHDebugModule {
 HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cutoffs cutoffs) :
     m_IsCaseSensitive{ caseSensitive },
     m_Cutoffs{ cutoffs }
@@ -18,11 +14,21 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
         return;
     }
 
+    const auto TrySetAddressFilter = [this](std::string_view addressStr) {
+        if (addressStr.starts_with("0x") || addressStr.starts_with("0X")) {
+            addressStr = addressStr.substr(2);
+        }
+        if (const auto address = notsa::try_ston<uintptr>(addressStr, 16)) {
+            m_HookAddressFilter = GetPtrAsHexString(*address);
+            return true;
+        }
+        return false;
+    };
+
     // If the first character is a digit, we assume the user wants to filter by address
     // as namespace or function names can't start with a digit
     if (DIGITS.contains(input.front())) {
-        m_HookFilter          = input;
-        m_HookFilterByAddress = true;
+        TrySetAddressFilter(input);
     } else {
         const auto namespaceSepPos = input.rfind(HOOK_FILTER_SEP);
         const auto hasNamespaceSep = namespaceSepPos != std::string_view::npos;
@@ -43,11 +49,9 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
         const auto hookFilterStr = hasNamespaceSep
             ? notsa::trim_string(input.substr(namespaceSepPos + HOOK_FILTER_SEP.size()))
             : input;
-        if (hookFilterStr.find_first_of(INVALID_HOOK_FILTER_CHARS) == std::string_view::npos) {
-            m_HookFilter = hookFilterStr;
-            if (!hookFilterStr.empty()) {
-                m_HookFilterByName    = !DIGITS.contains(hookFilterStr.front()); // Names can't start with a digit, if they do so, it might be a hex address
-                m_HookFilterByAddress = !m_HookFilterByName || notsa::try_ston<uintptr>(hookFilterStr, 16).has_value();
+        if (!hookFilterStr.empty() && hookFilterStr.find_first_of(INVALID_HOOK_FILTER_CHARS) == std::string_view::npos) {
+            if (!TrySetAddressFilter(hookFilterStr)) {
+                m_HookNameFilter = hookFilterStr;
             }
         }
 
@@ -61,41 +65,32 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
     }
 }
 
-HookFilter::~HookFilter() {
-    NOTSA_LOG_DEBUG("des");
-}
-
-
-bool HookFilter::IsHookFilterActive() const noexcept { 
-    return IsHookFilterPresent() && !m_HookFilter->empty(); 
-}
-
 float HookFilter::MatchItem(
-    std::string_view lowerCaseName,
+    std::string_view name,
     void*            addressA,
     void*            addressB
 ) const noexcept {
-    float score = 0.0;
-    const auto DoTest = [&](std::string_view str, float cutoff) {
-        score = std::max(score, MatchString(str, *m_HookFilter, cutoff, m_IsCaseSensitive));
+    float max = 0.0;
+    const auto DoTest = [&](std::string_view haystack, std::string_view needle, float cutoff) {
+        max = std::max(max, MatchString(haystack, needle, cutoff, m_IsCaseSensitive));
     };
-    if (m_HookFilterByName) {
-        DoTest(lowerCaseName, IsSimpleFilterString() ? m_Cutoffs.ItemGlobal : m_Cutoffs.ItemLocal);
+    if (IsHookFilterByNameActive()) {
+        DoTest(name, *m_HookNameFilter, IsSimpleFilterString() ? m_Cutoffs.ItemGlobal : m_Cutoffs.ItemLocal);
     }
-    if (m_HookFilterByAddress) {
+    if (IsHookFilterByAddressActive()) {
         for (auto address : { addressA, addressB }) {
             if (!address) {
                 continue;
             }
-            char buf[64]{ "0x" };
-            const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(address), 16);
-            if (ec != std::errc{}) {
-                continue;
-            }
-            DoTest({ buf, end }, m_Cutoffs.ItemAddress);
+            //char buf[64]{ "0x" };
+            //const auto [end, ec] = std::to_chars(buf + 2, buf + sizeof(buf) - 2, (uintptr_t)(address), 16);
+            //if (ec != std::errc{}) {
+            //    continue;
+            //}
+            DoTest(GetPtrAsHexString(std::bit_cast<uintptr_t>(address)), *m_HookAddressFilter, m_Cutoffs.ItemAddress);
         }
     }
-    return static_cast<float>(score);
+    return max;
 }
 
 bool HookFilter::IsFilteringByCategoryPath() const noexcept {
@@ -108,41 +103,33 @@ bool HookFilter::IsFilteringByCategoryPath() const noexcept {
     return true;
 }
 
-float HookFilter::MatchCategoryByNamespace(const NamespaceTokens& path, size_t depth) const noexcept {
+float HookFilter::MatchCategoryByPath(const CategoryPath& path, size_t depth) const noexcept {
     assert(path.size() > depth);
 
-    float total = 0.f;
-    const auto Match = [&] (size_t idxHaystack, size_t idxNeedle) {
-        const auto match = MatchString(path[idxHaystack], m_CategoryPathTokens[idxNeedle], m_Cutoffs.CategoryInPath, m_IsCaseSensitive, true);
-        total += match;
-        return match > 0.f;
+    if (m_CategoryPathTokens.size() > depth + 1) {
+        return 0.f; // Can't match whole, so just stop now
+    }
+
+    const auto MatchPath = [&] (size_t off = 0) {
+        float total = 0.f;
+        for (size_t i = 0; i < m_CategoryPathTokens.size(); i++) {
+            const auto match = MatchString(path[off + i], m_CategoryPathTokens[i], m_Cutoffs.CategoryInPath, m_IsCaseSensitive, true);
+            if (match <= 0.f) {
+                return 0.f;
+            }
+            total += match;
+        }
+        return total;
     };
 
-    if (IsRootRelativeNamespace()) { // Root must match stricly match the beginning, it's ok if there are more tokens
-        if (depth == 0) {
-            return 1.f; // Root will always match the beginning of the path at this depth
-        }
-        for (size_t i = 1; i < m_CategoryPathTokens.size(); i++) { // Start at 1, because 0 is root
-            if (i > depth) { 
-                break; // We can't match now, but might match later
-            }
-            if (!Match(i, i)) {
-                return 0.f; // Part didn't match
-            }
-        }
+    if (IsRootRelativePath()) { // Root must match stricly match the beginning
+        return MatchPath(0); // Compare whole from the begining of `path`
     } else { // This should match at the end
         if (m_CategoryPathTokens.size() > depth + 1) {
             return 0.f; // Can't match whole, so just stop now
         }
-        const auto off = (depth + 1) - m_CategoryPathTokens.size();
-        for (size_t i = 0; i < m_CategoryPathTokens.size(); i++) {
-            if (!Match(off + i, i)) {
-                return 0.f; // Part didn't match
-            }
-        }
+        return MatchPath(1 + depth - m_CategoryPathTokens.size()); // Compare `m_CategoryPathTokens` with the end of `path`
     }
-
-    return total;
 }
 
 float HookFilter::MatchCategoryByName(std::string_view name) const noexcept {
@@ -181,3 +168,20 @@ float HookFilter::MatchString(std::string_view haystack, std::string_view needle
     }
     return CalculateScore(rng::distance(haystack.begin(), range.begin()));
 }
+
+std::string HookFilter::GetPtrAsHexString(uintptr_t ptr) const noexcept {
+    // `to_chars` doesn't use the `0x` prefix, so we don't need to account for it here
+    // by limiting the size of the string we avoid heap allocation
+    // because std::string has SSO of around 10-15 chars on x32
+    constexpr auto MAX_PTR_HEX_SIZE = sizeof(uintptr_t) * 2;
+
+    std::string hex;
+    hex.resize(MAX_PTR_HEX_SIZE);
+    const auto [end, ec] = std::to_chars(hex.data(), hex.data() + hex.size(), ptr, 16);
+    if (ec != std::errc{}) {
+        return {};
+    }
+    hex.resize(rng::distance(hex.data(), end));
+    return hex;
+}
+}; // namespace RHDebugModule

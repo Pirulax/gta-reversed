@@ -302,9 +302,9 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
     }
 
     const auto hasOwnItemsToShow = !cat.Items.IsEmpty() && IsMatchingScoreOrNone(cat.MaxFilterScoreOwnItems),
-               hasCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
+               hasSubItemsToShow = !cat.Categories.IsEmpty() && IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems);
 
-    if (!hasOwnItemsToShow && !hasCategoriesToShow) {
+    if (!hasOwnItemsToShow && !hasSubItemsToShow) {
         return RenderCategoryResult::SKIPPED_FILTERED;
     }
 
@@ -337,26 +337,12 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             RestoreState
         );
 
-        //if (IsItemHovered()) {
-        //    SetTooltip(
-        //        "Left click: Redirect to Our/GTA code\n"
-        //        "Left click + Alt: Unhook\n"
-        //        "Middle click: Toggle (Slide setter)\n"
-        //        "Right click + hold: Slide setter (Enable/disable all hovered items)\n"
-        //    );
-        //}
-
         return std::make_tuple(open, changed);
     };
-
-    // Category tree node
-    if (m_FilterProcessor.NeedToAckFinished) {
-        SetNextItemOpen(cat.MaxScoreAllItems > 0.f || cat.MaxFilterScoreSubCats > 0.f, ImGuiCond_Always);
-    }
-
+    
     const auto SetCategoryOwnItemsState = [&](StepsCategory& c, HookState state) {
         return rng::fold_left(c.Items, false, [state](bool changed, StepsItem& item) {
-            return changed | item.Ptr->SetState(state);
+            return item.Ptr->SetState(state) || changed;
         });
     };
 
@@ -365,6 +351,13 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             return changed | item.Ptr->SetToPreviousState();
         });
     };
+
+    //
+    // Category tree node
+    //
+    if (m_FilterProcessor.NeedToAckFinished) {
+        SetNextItemOpen(cat.MaxScoreAllItems > 0.f || cat.MaxFilterScoreSubCats > 0.f, ImGuiCond_Always);
+    }
 
     const auto [open, categoryStateChanged] = TreeNodeWithCheckbox(
         m_Filter.ShowScores
@@ -385,7 +378,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
         cat.CommonStateAllItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
             ? HookState::RedirectToGTA
             : HookState::RedirectToOurs,
-        [&] (HookState state) {
+        [&] (HookState state) -> bool {
             cat.LastSetOurItemsState = state;
             return [&, state](this auto&& Self, StepsCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
                 bool changed = SetCategoryOwnItemsState(c, state);
@@ -395,7 +388,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
                 return changed;
             }(cat);
         },
-        [&] () {
+        [&] () -> bool {
             return [&](this auto&& Self, StepsCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
                 bool changed = RestoreCategoryOwnItemsState(c);
                 for (auto& sc : c.Categories) {
@@ -409,10 +402,12 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
         return RenderCategoryResult::SKIPPED_CLOSED;
     }
 
+    const auto hasSubCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
+
     // Draw items (hooks) (if any)
     bool itemsStateChanged = false;
     if (hasOwnItemsToShow) {
-        if (hasCategoriesToShow) { // Render a separate tree node that's like a category for the items
+        if (hasSubItemsToShow) { // Render a separate tree node that's like a category for the items
             if (m_FilterProcessor.NeedToAckFinished) {
                 if (cat.MaxFilterScoreOwnItems > 0.f) {
                     SetNextItemOpen(cat.MaxFilterScoreOwnItems > 0.f, ImGuiCond_Always);
@@ -428,11 +423,11 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
                 cat.CommonStateOwnItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
                     ? HookState::RedirectToGTA
                     : HookState::RedirectToOurs,
-                [&] (HookState s) {
+                [&] (HookState s) -> bool {
                     cat.LastSetOurItemsState = s;
                     return SetCategoryOwnItemsState(cat, s);
                 },
-                [&] () {
+                [&] () -> bool {
                     return RestoreCategoryOwnItemsState(cat);
                 }
             );
@@ -447,7 +442,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
 
     // Draw subcategories
     bool subCategoriesStateChanged = false;
-    if (hasCategoriesToShow) {
+    if (hasSubItemsToShow) {
         for (auto& v : cat.Categories) {
             subCategoriesStateChanged |= RenderCategory(v) == RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED;
         }

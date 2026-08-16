@@ -18,7 +18,7 @@ private:
     float CalculateCategoryScoresByName(StepsCategory& cat) const noexcept;
 
     float CalculateCategoryScoresByPath(StepsCategory& cat) const noexcept;
-    float CalculateCategoryScoresByPath(StepsCategory& cat, const StepsCategory* parent, HookFilter::NamespaceTokens& ns, size_t depth) const noexcept;
+    float CalculateCategoryScoresByPath(StepsCategory& cat, const StepsCategory* parent, HookFilter::CategoryPath& ns, size_t depth) const noexcept;
     void  SetCategoryUnfilteredCategoryScores(StepsCategory& cat) const noexcept;
 
     std::optional<float> CalculateCategoryItemsScore(StepsCategory& cat, bool onlyIfCategoryHasScore) const noexcept;
