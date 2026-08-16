@@ -17,40 +17,27 @@
 #include "Utility.h"
 #include "HooksDebugModule.h"
 
+#include "HooksFilterListStep.h"
 #include "HooksSortListStep.hpp"
-
-namespace RH = ReversibleHooks;
-namespace rng = std::ranges;
 
 using namespace RHDebugModule;
 using namespace ImGui;
 
-using HookState = ReversibleHooks::ReversibleHook::TwoWayHookState;
-
 constexpr ImVec2 STATE_BUTTON_SIZE{ 80.f, 0.f };
+constexpr auto   FILTER_INPUT_DEBOUNCE_TIME = std::chrono::milliseconds{ 250 };
 
-bool HooksDebugModule::HandleSlideSetterForItem(bool& inOutState) {
-    if (m_SlideSetter.Mode == SlideSetterMode::NONE || !IsItemHovered()) {
-        return false;
-    }
-    if (m_SlideSetter.Mode == SlideSetterMode::SETTER) {
-        m_SlideSetter.Mode = inOutState
-            ? SlideSetterMode::TURN_ON
-            : SlideSetterMode::TURN_OFF;
-    }
-    inOutState = [&]{
-        switch (m_SlideSetter.Mode) {
-        case SlideSetterMode::TURN_ON:  return true;
-        case SlideSetterMode::TURN_OFF: return false;
-        case SlideSetterMode::TOGGLE:   return !inOutState;
-        default: NOTSA_UNREACHABLE();
-        }
-    }();
-    return true;
+namespace RHDebugModule {
+HooksDebugModule::HooksDebugModule() :
+    m_FilterProcessor{ .Thread{ [this] { FilteringThread(); } } }
+{}
+
+HooksDebugModule::~HooksDebugModule() {
+    m_FilterProcessor.Exiting = true;
+    m_FilterProcessor.CV.notify_one();
+    m_FilterProcessor.Thread.join();
 }
 
-
-void RHDebugModule::HooksDebugModule::FilteringThread() {
+void HooksDebugModule::FilteringThread() {
     while (!m_FilterProcessor.Exiting) {
         std::unique_lock lock{ m_FilterProcessor.Mtx };
         m_FilterProcessor.CV.wait(lock);
@@ -70,7 +57,7 @@ void RHDebugModule::HooksDebugModule::FilteringThread() {
     }
 }
 
-bool RHDebugModule::HooksDebugModule::RunFilter() {
+bool HooksDebugModule::RunFilter() {
     if (!m_HooksList.RootCategory) {
         return false; // Nothing to filter
     }
@@ -86,7 +73,7 @@ bool RHDebugModule::HooksDebugModule::RunFilter() {
     return true;
 }
 
-void RHDebugModule::HooksDebugModule::CheckNeedsToRunFilter() {
+void HooksDebugModule::CheckNeedsToRunFilter() {
     if (std::exchange(m_Filter.Changed, false)) {
         m_Filter.RunAt = FilterClock::now() + FILTER_INPUT_DEBOUNCE_TIME;
     } else if (m_Filter.RunAt.has_value() && *m_Filter.RunAt < FilterClock::now()) {
@@ -96,19 +83,61 @@ void RHDebugModule::HooksDebugModule::CheckNeedsToRunFilter() {
     }
 }
 
-void RHDebugModule::HooksDebugModule::RenderFilter() {
+void HooksDebugModule::RenderFilter() {
     SetNextItemWidth(-1.f);
     m_Filter.Changed |= InputText("##FilterInput", &m_Filter.Input);
     SetItemTooltip(
-        "`cpy`                - Filter by category/function\n"
+        "`cpy`                - Filter by function\n"
         "`cped::`             - Filter by category name\n"
-        "`ped/player`         - Filter by category path\n"
+        "`ped/player`         - Filter by category path, showing all items\n"
         "`::function`         - Filter by function name, any category\n"
         "`ped/player::busted` - Filter by both category path and function name\n"
         "`/entity`            - Filter relative to root, must match whole path\n"
         "Use `*` as wildrcard\n"
         "For more tips see gta-reversed-modern/discussions/190\n"
     );
+}
+
+template<std::predicate<HookState> SetStateFn>
+bool HooksDebugModule::HandleSlideSetterForItem(std::optional<HookState> state, HookState next, SetStateFn&& SetState) {
+    switch (m_SlideSetter.Mode) {
+    case SlideSetter::Mode::NONE: {
+        return false;
+    }
+    case SlideSetter::Mode::PICK_THEN_SET: {
+        if (state.has_value()) {
+            m_SlideSetter.StateToSet = *state;
+            m_SlideSetter.Mode       = SlideSetter::Mode::SET;
+        }
+        return false;
+    }
+    case SlideSetter::Mode::SET: {
+        return SetState(m_SlideSetter.StateToSet);
+    }
+    case SlideSetter::Mode::TOGGLE: {
+        return SetState(next);
+    }
+    default: NOTSA_UNREACHABLE_CASE(m_SlideSetter.Mode);
+    }
+}
+
+void HooksDebugModule::UpdateSlideSetterMode() {
+    const auto next =
+        IsMouseDown(ImGuiMouseButton_Middle)  ? SlideSetter::Mode::TOGGLE
+        : IsMouseDown(ImGuiMouseButton_Right) ? SlideSetter::Mode::PICK_THEN_SET
+                                              : SlideSetter::Mode::NONE;
+
+    if (m_SlideSetter.Mode == next) {
+        return;
+    }
+
+    if (next != SlideSetter::Mode::NONE) {
+        if (m_SlideSetter.Mode == SlideSetter::Mode::SET && next == SlideSetter::Mode::PICK_THEN_SET) {
+            return; // Already setting
+        }
+    }
+
+    m_SlideSetter = { .Mode = next };
 }
 
 const char* StateToString(HookState state) {
@@ -120,10 +149,21 @@ const char* StateToString(HookState state) {
     }
 }
 
+const char* GetTypeSymbolUI(const ReversibleHooks::HookCategoryItem& i) noexcept {
+    using enum ReversibleHooks::ReversibleHook::HookType;
+    switch (i.GetType()) {
+    case StaticTwoWay:      return "S";
+    case Virtual:           return "V";
+    case VirtualDestructor: return "VD";
+    case VMTRedirect:       return "VR";
+    default:                return "U";
+    }
+}
+
 template<
     std::predicate<HookState> SetStateFn,
     std::predicate<>          RestoreStateFn>
-bool StateButton(
+bool HooksDebugModule::StateChanger(
     const char*              title,
     bool                     disabled,
     ImTristate               onOffCheckboxState,
@@ -156,12 +196,27 @@ bool StateButton(
             case HookState::RedirectToOurs: return IM_COL32(0, 127, 0, a);  // Green
             default:                        NOTSA_UNREACHABLE_CASE(state);
             }
-        }).value_or(IM_COL32(127, 127, 0, a))
+        }).value_or(IM_COL32(127, 127, 0, a)) // yellow for mixed
     );
 
     SameLine();
     if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
         changed |= SetState(next);
+    }
+    if (IsItemHovered()) {
+        const auto id = ImGui::GetID("setter");
+        if (m_SlideSetter.LastUsedOnID != id) {
+            const auto used = HandleSlideSetterForItem(current, next, SetState);
+            if (used) {
+                m_SlideSetter.LastUsedOnID = id;
+            }
+            changed |= used;
+        }
+        SetTooltip(
+            "Left click: Redirect to Our/GTA code\n"
+            "Middle click: Toggle (Slide setter)\n"
+            "Right click + hold: Slide setter (Enable/disable all hovered items)\n"
+        );
     }
     PopStyleColor();
 
@@ -171,31 +226,7 @@ bool StateButton(
     return changed;
 }
 
-auto GetNextCycleState(std::optional<HookState> last, bool withUnhooked = false) noexcept {
-    switch (const auto value = last.value_or(HookState::RedirectToOurs)) { // const auto last = last.value_or(OverallState().value_or(HookState::RedirectToOurs))
-    case HookState::RedirectToOurs: return HookState::RedirectToGTA;
-    case HookState::RedirectToGTA:  return withUnhooked ? HookState::Unhooked : HookState::RedirectToOurs;
-    case HookState::Unhooked:       return HookState::RedirectToOurs;
-    default:                        NOTSA_UNREACHABLE_CASE(value);
-    }
-}
-
-bool IsMatchingScoreOrNone(const std::optional<float>& score, float cutoff = 0.f) {
-    return !score.has_value() || *score > cutoff;
-}
-
-void RHDebugModule::HooksDebugModule::UpdateSlideSetterMode() {
-    m_SlideSetter.Mode = IsMouseDown(ImGuiMouseButton_Middle)
-        ? SlideSetterMode::TOGGLE
-        : IsMouseDown(ImGuiMouseButton_Right)
-            ? m_SlideSetter.Mode == SlideSetterMode::TURN_OFF || m_SlideSetter.Mode == SlideSetterMode::TURN_ON
-                ? m_SlideSetter.Mode // Technically in setter mode already
-                : SlideSetterMode::SETTER
-            : SlideSetterMode::NONE;
-
-}
-
-void RHDebugModule::HooksDebugModule::RenderMenuBar() {
+void HooksDebugModule::RenderMenuBar() {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Tools")) {
             if (ImGui::MenuItem("Export hooks.csv")) {
@@ -247,14 +278,14 @@ bool HooksDebugModule::RenderCategoryItems(StepsCategory& cat) {
         {
             PushStyleVar(ImGuiStyleVar_Alpha, GetStyle().Alpha * 0.5f);
             AlignTextToFramePadding();
-            Text("T"); //Text(item.GetTypeSymbolUI());
+            Text(GetTypeSymbolUI(*item.Ptr));
             PopStyleVar();
         }
 
         // State checkbox
-        changed |= StateButton(
+        changed |= StateChanger(
             m_Filter.ShowScores
-                ? std::format("{} (Score: {})", item.Ptr->GetName(), item.FilterScore.value_or(-1.f)).c_str()
+                ? std::format("{} (Score: {})", item.Ptr->GetName(), item.FilterScore).c_str()
                 : item.Ptr->GetName().c_str(),
             item.Ptr->GetIsStateLocked(),
             item.Ptr->GetState() == HookState::Unhooked
@@ -310,7 +341,9 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
 
     notsa::ui::ScopedID idg{ cat.Category->Name() };
 
-    const auto TreeNodeWithCheckbox = [](
+    bool changed = false;
+
+    const auto TreeNodeWithCheckbox = [&changed, this](
         const char*                                     label,
         bool                                            disabled,
         bool                                            hasAnyUnhooked,
@@ -323,7 +356,7 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
         const auto open = TreeNodeEx("##         ", ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanFullWidth);
         
         SameLine();
-        const auto changed = StateButton(
+        changed |= StateChanger(
             label,
             disabled,
             commonState == HookState::Unhooked
@@ -337,18 +370,18 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             RestoreState
         );
 
-        return std::make_tuple(open, changed);
+        return open;
     };
     
     const auto SetCategoryOwnItemsState = [&](StepsCategory& c, HookState state) {
         return rng::fold_left(c.Items, false, [state](bool changed, StepsItem& item) {
-            return item.Ptr->SetState(state) || changed;
+            return item.Ptr->SetState(state) | changed;
         });
     };
 
     const auto RestoreCategoryOwnItemsState = [&](StepsCategory& c) {
         return rng::fold_left(c.Items, false, [](bool changed, StepsItem& item) {
-            return changed | item.Ptr->SetToPreviousState();
+            return item.Ptr->SetToPreviousState() | changed;
         });
     };
 
@@ -359,31 +392,30 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
         SetNextItemOpen(cat.MaxScoreAllItems > 0.f || cat.MaxFilterScoreSubCats > 0.f, ImGuiCond_Always);
     }
 
-    const auto [open, categoryStateChanged] = TreeNodeWithCheckbox(
+    if (TreeNodeWithCheckbox(
         m_Filter.ShowScores
             ? std::format(
-                  "{} [Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}",
-                  cat.Category->Name(),
-                  cat.FilterScore,
-                  cat.MaxFilterScoreOwnItems,
-                  cat.MaxFilterScoreSubItems,
-                  cat.MaxScoreAllItems,
-                  cat.MaxFilterScoreSubCats,
-                  cat.MaxFilterScore
+                "{} [Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}", cat.Category->Name(),
+                cat.FilterScore,
+                cat.MaxFilterScoreOwnItems,
+                cat.MaxFilterScoreSubItems,
+                cat.MaxScoreAllItems,
+                cat.MaxFilterScoreSubCats,
+                cat.MaxFilterScore
               ).c_str()
             : cat.Category->Name().c_str(),
         !cat.AnyUnlockedItems,
         cat.AnyUnhookedItems,
         cat.CommonStateAllItems,
-        cat.CommonStateAllItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+        cat.CommonStateAllItems.value_or(cat.LastSetAllItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
             ? HookState::RedirectToGTA
             : HookState::RedirectToOurs,
         [&] (HookState state) -> bool {
-            cat.LastSetOurItemsState = state;
+            cat.LastSetAllItemsState = state;
             return [&, state](this auto&& Self, StepsCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
                 bool changed = SetCategoryOwnItemsState(c, state);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc);
+                    changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);
                 }
                 return changed;
             }(cat);
@@ -392,104 +424,102 @@ auto HooksDebugModule::RenderCategory(StepsCategory& cat) -> RenderCategoryResul
             return [&](this auto&& Self, StepsCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
                 bool changed = RestoreCategoryOwnItemsState(c);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc);
+                    changed |= Self(sc) && m_HooksList.Builder.UpdateCategory(sc);
                 }
                 return changed;
             }(cat);
         }
-    );
-    if (!open) {
-        return RenderCategoryResult::SKIPPED_CLOSED;
-    }
+    )) {
+        const auto hasSubCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
 
-    const auto hasSubCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
-
-    // Draw items (hooks) (if any)
-    bool itemsStateChanged = false;
-    if (hasOwnItemsToShow) {
-        if (hasSubItemsToShow) { // Render a separate tree node that's like a category for the items
-            if (m_FilterProcessor.NeedToAckFinished) {
-                if (cat.MaxFilterScoreOwnItems > 0.f) {
-                    SetNextItemOpen(cat.MaxFilterScoreOwnItems > 0.f, ImGuiCond_Always);
+        // Draw items (hooks) (if any)
+        bool itemsStateChanged = false;
+        if (hasOwnItemsToShow) {
+            if (hasSubItemsToShow) { // Render a separate tree node that's like a category for the items
+                if (m_FilterProcessor.NeedToAckFinished) {
+                    if (cat.MaxFilterScoreOwnItems > 0.f) {
+                        SetNextItemOpen(cat.MaxFilterScoreOwnItems > 0.f, ImGuiCond_Always);
+                    }
                 }
-            }
-            const auto [open, stateChanged] = TreeNodeWithCheckbox(
-                m_Filter.ShowScores
-                    ? std::format("Hooks [Max filter score: {}]", cat.MaxFilterScoreOwnItems).c_str()
-                    : "Hooks",
-                !cat.AnyUnlockedOurItems,
-                cat.AnyUnhookedOurItems,
-                cat.CommonStateOwnItems,
-                cat.CommonStateOwnItems.value_or(cat.LastSetOurItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
-                    ? HookState::RedirectToGTA
-                    : HookState::RedirectToOurs,
-                [&] (HookState s) -> bool {
-                    cat.LastSetOurItemsState = s;
-                    return SetCategoryOwnItemsState(cat, s);
-                },
-                [&] () -> bool {
-                    return RestoreCategoryOwnItemsState(cat);
+                if (TreeNodeWithCheckbox(
+                    m_Filter.ShowScores
+                        ? std::format("Hooks [Max filter score: {}]", cat.MaxFilterScoreOwnItems).c_str()
+                        : "Hooks",
+                    !cat.AnyUnlockedOwnItems,
+                    cat.AnyUnhookedOwnItems,
+                    cat.CommonStateOwnItems,
+                    cat.CommonStateOwnItems.value_or(cat.LastSetAllItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
+                        ? HookState::RedirectToGTA
+                        : HookState::RedirectToOurs,
+                    [&] (HookState s) -> bool {
+                        cat.LastSetAllItemsState = s;
+                        return SetCategoryOwnItemsState(cat, s);
+                    },
+                    [&] () -> bool {
+                        return RestoreCategoryOwnItemsState(cat);
+                    }
+                )) {
+                    itemsStateChanged |= RenderCategoryItems(cat);
+                    TreePop();
                 }
-            );
-            if (open) {
-                RenderCategoryItems(cat);
-                TreePop();
+            } else { // If there are no subcategories we can draw all items directly under this node
+                itemsStateChanged |= RenderCategoryItems(cat);
             }
-        } else { // If there are no subcategories we can draw all items directly under this node
-            itemsStateChanged |= RenderCategoryItems(cat);
         }
-    }
 
-    // Draw subcategories
-    bool subCategoriesStateChanged = false;
-    if (hasSubItemsToShow) {
-        for (auto& v : cat.Categories) {
-            subCategoriesStateChanged |= RenderCategory(v) == RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED;
+        // Draw subcategories
+        if (hasSubItemsToShow) {
+            for (auto& v : cat.Categories) {
+                changed |= RenderCategory(v) == RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED;
+            }
         }
-    }
 
-    // Pop the category's tree node
-    TreePop();
+        // Pop the category's tree node
+        TreePop();
+    }
 
     // Now check if we've changed, and if so, check if that change affects the state of the parent
-    bool changed = itemsStateChanged || categoryStateChanged || subCategoriesStateChanged;
     if (changed) {
         changed &= m_HooksList.Builder.UpdateCategory(cat);
-    }
+    }        
 
     return changed
         ? RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED
         : RenderCategoryResult::RENDERED;
 }
 
-const char* RHDebugModule::HooksDebugModule::GetWindowTitle() noexcept {
-    m_WindowTitle.clear();
-    const auto Append = [&](std::string_view fmt, auto&&... args) {
-        std::vformat_to(std::back_inserter(m_WindowTitle), fmt, std::make_format_args(args...));
-    };
-    Append("ReversibleHooks (TM) (R)");
+void HooksDebugModule::RenderHooksSection() {
+    notsa::ui::ScopedChild c{ "HooksScrollableSection", ImVec2(0.0f, -GetFrameHeightWithSpacing()), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar };
+
     std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
     if (lock.owns_lock()) {
-        Append(" - [Filtering: {} ms]", std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.FinishedAt - m_FilterProcessor.StartedAt));
+        switch (RenderCategory(*m_HooksList.RootCategory)) {
+        case RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED: {
+            m_HooksList.Builder.UpdateCategory(*m_HooksList.RootCategory);
+            break;
+        }
+        case RenderCategoryResult::SKIPPED_FILTERED: {
+            notsa::ui::WindowCenteredTextUnformatted("No filter results");
+            break;
+        }
+        }
+        m_FilterProcessor.NeedToAckFinished = false;
     } else {
-        Append(" - [Status: Filtering...]");
+        notsa::ui::WindowCenteredTextUnformatted("Filtering in progress...");
     }
-    Append("###ReversibleHooks"); // Keeps ID the same, as window title is used for it otherwise
-    return m_WindowTitle.c_str();
 }
 
-RHDebugModule::HooksDebugModule::HooksDebugModule() :
-    m_FilterProcessor{ .Thread{ [this] { FilteringThread(); } } }
-{}
-
-RHDebugModule::HooksDebugModule::~HooksDebugModule() {
-    m_FilterProcessor.Exiting = true;
-    m_FilterProcessor.CV.notify_one();
-    m_FilterProcessor.Thread.join();
+void HooksDebugModule::RenderFooter() {
+    std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
+    if (lock.owns_lock()) {
+        Text("Filtering took %lld ms", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.FinishedAt - m_FilterProcessor.StartedAt).count()));
+    } else {
+        TextUnformatted("Status: Filtering...");
+    }
 }
 
 void HooksDebugModule::RenderWindow() {
-    const notsa::ui::ScopedWindow window{ GetWindowTitle(), {500.f, 700.f}, m_IsOpen, ImGuiWindowFlags_MenuBar};
+    const notsa::ui::ScopedWindow window{ "ReversibleHooks (TM) (R)", {500.f, 700.f}, m_IsOpen, ImGuiWindowFlags_MenuBar};
     if (!m_IsOpen) {
         return;
     }
@@ -502,24 +532,10 @@ void HooksDebugModule::RenderWindow() {
 
     RenderMenuBar();
     RenderFilter();
-    {
-        std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
-        if (lock.owns_lock()) {
-            switch (RenderCategory(*m_HooksList.RootCategory)) {
-            case RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED: {
-                m_HooksList.Builder.UpdateCategory(*m_HooksList.RootCategory);
-                break;
-            }
-            case RenderCategoryResult::SKIPPED_FILTERED: {
-                notsa::ui::WindowCenteredTextUnformatted("No filter results");
-                break;
-            }
-            }
-            m_FilterProcessor.NeedToAckFinished = false;
-        } else {
-            notsa::ui::WindowCenteredTextUnformatted("Filtering in progress...");
-        }
-    }
+    Separator();
+    RenderHooksSection();
+    Separator();
+    RenderFooter();
 
     CheckNeedsToRunFilter();
 }
@@ -529,3 +545,5 @@ void HooksDebugModule::RenderMenuEntry() {
         ImGui::MenuItem("Hooks", nullptr, &m_IsOpen);
     });
 }
+
+};

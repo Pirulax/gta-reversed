@@ -17,7 +17,7 @@ void HooksFilterListStep::Process(StepsCategory& root) const noexcept {
 
     // NB: Always run item filtering after category (See above why)
     if (m_Filter.IsHookFilterActive()) {
-        CalculateCategoryItemsScore(root, m_Filter.IsFilteringByCategory() && !m_Filter.IsSimpleFilterString());
+        CalculateCategoryItemsScore(root, m_Filter.IsFilteringByCategory());
     } else {
         SetCategoryUnfilteredItemsScore(root);
     }
@@ -43,11 +43,7 @@ float HooksFilterListStep::CalculateCategoryScoresByPath(StepsCategory& cat, con
     cat.FilterScore           = m_Filter.MatchCategoryByPath(ns, depth);
     cat.MaxFilterScoreSubCats = std::nullopt;
 
-    if (m_Filter.IsRootRelativePath()) {
-        //if (cat.FilterScore <= 0.f) {
-        //    return 0.f; // If we didn't match neither will any of our sub-categories, so we can just stop here
-        //}
-    } else if (parent) {
+    if (!m_Filter.IsRootRelativeCategoryPath() && parent) {
         // Filter just checks the end of the path as an optimization, but
         // but, logically, if our parent has matched, at worst our filter score
         // should be at least as good as our parent's filter score

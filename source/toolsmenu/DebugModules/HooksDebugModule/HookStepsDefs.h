@@ -1,16 +1,10 @@
 #pragma once
 
-#include <thread>
 #include <optional>
-#include <string>
-#include <string_view>
-
-#include <boost/static_string.hpp>
 
 #include <reversiblehooks/HookCategory.h>
 #include <reversiblehooks/HookCategoryItem.h>
 
-#include <Pool.h>
 #include <ListItem_c.h>
 #include <List_c.h>
 
@@ -36,10 +30,10 @@ struct StepsCategory : ListItem_c<StepsCategory> {
     std::optional<float>                           MaxScoreAllItems{};          //!< Max score of our items and sub items
     std::optional<float>                           MaxFilterScore{};         //!< max of all of the above
     bool                                           AnyUnhookedItems{};
-    bool                                           AnyUnhookedOurItems{};
+    bool                                           AnyUnhookedOwnItems{};
     bool                                           AnyUnlockedItems{};
-    bool                                           AnyUnlockedOurItems{};
-    std::optional<HookState>                       LastSetOurItemsState{};
+    bool                                           AnyUnlockedOwnItems{};
+    std::optional<HookState>                       LastSetAllItemsState{};
     std::optional<HookState>                       LastSetAllItemState{};
     CommonState                                    CommonStateAllItems{}; //!< `nullopt` if there's no common state (There should be no categories with no items/sub-categories in this list)
     CommonState                                    CommonStateOwnItems{}; //!< `nullopt` if there's no common state, or no items

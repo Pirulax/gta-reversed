@@ -9,7 +9,7 @@ namespace RHDebugModule {
 class HookFilter {
     static constexpr const char*      WILDCARD_CHAR = "*";
 
-    static constexpr std::string_view NAMESPACE_SEP{ "/" };
+    static constexpr std::string_view CATEGORY_PATH_SEPARATOR{ "/" };
     static constexpr std::string_view INVALID_CAT_PATH_CHARS{ "!\"#$%&'()+,-.:;<=>?@[\\]^`{|}~ " }; // Characters that may not be present in the namespace filter
 
     static constexpr std::string_view HOOK_FILTER_SEP{ "::" };
@@ -46,6 +46,13 @@ public:
      * @return If filter applies to categories
      */
     bool IsFilteringByCategoryPath() const noexcept;
+
+    /*!
+    * @brief Should the current filtered namespace be relative to the root namespace.
+    * @brief This is the case when the user prepends the namespace tokens with a `/` (NAMESPACE_SEP).
+    * @brief Eg.: `/Entity` should only show the `Entity` namespace under `Root` (But not, for example, `Audio/AEVehicleAudioEntity`)
+    */
+    bool IsRootRelativeCategoryPath() const noexcept { return m_CategoryPathTokens.size() >= 1 && m_CategoryPathTokens.front().empty(); }
 
     /*!
      * @return If filtering is applied to categories
@@ -92,13 +99,6 @@ public:
     bool IsHookFilterPresent() const noexcept { return m_HookNameFilter.has_value() || m_HookAddressFilter.has_value(); }
 
     /*!
-     * @brief Should the current filtered namespace be relative to the root namespace.
-     * @brief This is the case when the user prepends the namespace tokens with a `/` (NAMESPACE_SEP).
-     * @brief Eg.: `/Entity` should only show the `Entity` namespace under `Root` (But not, for example, `Audio/AEVehicleAudioEntity`)
-     */
-    bool IsRootRelativePath() const noexcept { return m_CategoryPathTokens.size() >= 1 && m_CategoryPathTokens.front().empty(); }
-
-    /*!
      * @return Is filtering done by category name
      */
     bool IsFilteringByCategoryName() const noexcept { return m_CategoryPathTokens.size() == 1; }
@@ -106,7 +106,7 @@ public:
     /*!
      * @return If what we're working with is just a simple filter string (So category by name and hook filter are active, no namespaces)
      */
-    bool IsSimpleFilterString() const noexcept { return m_IsSimpleFilterString; }
+    bool IsGlobalHookSearch() const noexcept { return m_IsGlobalHookSearch; }
 
     /*!
      * @brief Do string matching using Levenshtein distance against the 
@@ -147,8 +147,8 @@ private:
     //! - `///` - 4 empty strings
     std::vector<std::string> m_CategoryPathTokens{};
 
-    //! If what we're working with is just a simple filter string (So category by name and hook filter are active, no namespaces)
-    bool m_IsSimpleFilterString{};
+    //! We're filtering by hook name and/or address, and no category path is present (So we're searching globally)
+    bool m_IsGlobalHookSearch{};
 
     //! Filter of hook name
     //! Nullopt if no hook filtering is present OR the string entered is a hex number, in which case we treat it as an address filter

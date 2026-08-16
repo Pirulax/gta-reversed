@@ -14,15 +14,17 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
         return;
     }
 
-    const auto TrySetAddressFilter = [this](std::string_view addressStr) {
-        if (addressStr.starts_with("0x") || addressStr.starts_with("0X")) {
-            addressStr = addressStr.substr(2);
+    const auto TrySetAddressFilter = [this](std::string_view str) {
+        if (str.starts_with("0x") || str.starts_with("0X")) {
+            str = str.substr(2);
         }
-        if (const auto address = notsa::try_ston<uintptr>(addressStr, 16)) {
+        const char* end;
+        const auto  address = notsa::try_ston<uintptr>(str, 16, &end);
+        const auto  matched = address.has_value() && end == str.data() + str.size();
+        if (matched) {
             m_HookAddressFilter = GetPtrAsHexString(*address);
-            return true;
         }
-        return false;
+        return matched;
     };
 
     // If the first character is a digit, we assume the user wants to filter by address
@@ -33,19 +35,40 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
         const auto namespaceSepPos = input.rfind(HOOK_FILTER_SEP);
         const auto hasNamespaceSep = namespaceSepPos != std::string_view::npos;
 
-        // First half (if any), or the whole input is the category path filter
-        const auto categoryPathStr = hasNamespaceSep
-            ? input.substr(0, namespaceSepPos)
+        // First half (if any), or the whole input is the category (path) filter (if there's a `/`)
+        // Eg.:
+        // - `Category/` - By path
+        // - `Category/Subcategory`  - By path
+        // - `Category/Subcategory::Function` - By path
+        // - `Category::Function` - Simple by-name category filter
+        // What isn't a category filter:
+        // - `::Function` - No category filter
+        // - `Function` - No category filter
+        const auto categoryFilterStr = hasNamespaceSep
+            ? input.substr(0, namespaceSepPos) // No need to trim here, it'll be trimmed when emplacing
             : input;
-        if (!categoryPathStr.contains(INVALID_CAT_PATH_CHARS)) {
-            for (auto t : SplitStringView(categoryPathStr, NAMESPACE_SEP)) {
+        m_IsGlobalHookSearch = hasNamespaceSep
+            ? categoryFilterStr == WILDCARD_CHAR                    // Eg.: `*::` would still match search globally
+            : !categoryFilterStr.contains(CATEGORY_PATH_SEPARATOR); // Eg.: `Function`
+        if (!m_IsGlobalHookSearch && !categoryFilterStr.empty() && categoryFilterStr.find_first_of(INVALID_CAT_PATH_CHARS) == std::string_view::npos) {
+            for (auto t : SplitStringView(categoryFilterStr, CATEGORY_PATH_SEPARATOR)) {
                 m_CategoryPathTokens.emplace_back(notsa::trim_string(t));
             }
-            if (m_CategoryPathTokens.size() == 1 && m_CategoryPathTokens.front().empty()) {
-                m_CategoryPathTokens.clear(); // An empty string would match all strings, so there's no point in keeping it
+            if (m_CategoryPathTokens.size() == 1 && m_CategoryPathTokens.back().empty()) {
+                m_CategoryPathTokens.clear(); // An empty string would match all categories, so there's no point in keeping it
             }
         }
-        // Second half (if any) or the whole input is the hook filter
+
+        // Whole string (if no namespace separator or string has no `/`) or second half is the whole input is the hook filter
+        // Eg.:
+        // - `Function`
+        // - `::Function`
+        // - `Category::Function`
+        // - `category/subcategory::` (Hook filter present, but not active)
+        // - `category/subcategory::Function` (Hook filter present and active)
+        // What isn't a hook filter:
+        // - `category/`
+        // - `category/subcategory`
         const auto hookFilterStr = hasNamespaceSep
             ? notsa::trim_string(input.substr(namespaceSepPos + HOOK_FILTER_SEP.size()))
             : input;
@@ -53,15 +76,7 @@ HookFilter::HookFilter(std::string_view untrimmedInput, bool caseSensitive, Cuto
             if (!TrySetAddressFilter(hookFilterStr)) {
                 m_HookNameFilter = hookFilterStr;
             }
-        }
-
-        m_IsSimpleFilterString = !hasNamespaceSep && IsFilteringByCategoryName() && IsHookFilterActive();
-    }
-
-    // In case user passes in a string with multiple `/` with nothing in-between we will have quite a few empty tokens.
-    // We have have to remove all the leading empty tokens up until the last empty one.
-    while (m_CategoryPathTokens.size() >= 2 && m_CategoryPathTokens[0].empty() && m_CategoryPathTokens[1].empty()) {
-        m_CategoryPathTokens.erase(m_CategoryPathTokens.begin());
+        }       
     }
 }
 
@@ -75,7 +90,7 @@ float HookFilter::MatchItem(
         max = std::max(max, MatchString(haystack, needle, cutoff, m_IsCaseSensitive));
     };
     if (IsHookFilterByNameActive()) {
-        DoTest(name, *m_HookNameFilter, IsSimpleFilterString() ? m_Cutoffs.ItemGlobal : m_Cutoffs.ItemLocal);
+        DoTest(name, *m_HookNameFilter, m_IsGlobalHookSearch ? m_Cutoffs.ItemGlobal : m_Cutoffs.ItemLocal);
     }
     if (IsHookFilterByAddressActive()) {
         for (auto address : { addressA, addressB }) {
@@ -122,13 +137,13 @@ float HookFilter::MatchCategoryByPath(const CategoryPath& path, size_t depth) co
         return total;
     };
 
-    if (IsRootRelativePath()) { // Root must match stricly match the beginning
-        return MatchPath(0); // Compare whole from the begining of `path`
+    if (IsRootRelativeCategoryPath()) {
+        return MatchPath(0); // Compare whole from the begining of `path`, whole filter must match (it's ok to have excess tokens in the input path)
     } else { // This should match at the end
         if (m_CategoryPathTokens.size() > depth + 1) {
             return 0.f; // Can't match whole, so just stop now
         }
-        return MatchPath(1 + depth - m_CategoryPathTokens.size()); // Compare `m_CategoryPathTokens` with the end of `path`
+        return MatchPath(1 + depth - m_CategoryPathTokens.size()); // Compare `m_CategoryPathTokens` with the end of `path`, it's ok if we have exess tokens in the input `path`
     }
 }
 
