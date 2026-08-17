@@ -19,7 +19,8 @@ class saRecipe(ConanFile):
         "vorbis/1.3.7",
         "imgui/1.91.5-docking",
         "sdl/3.2.6",
-        "libjpeg-turbo/3.1.0"
+        "libjpeg-turbo/3.1.0",
+        "boost/1.91.0",
     ]
 
     default_options = {

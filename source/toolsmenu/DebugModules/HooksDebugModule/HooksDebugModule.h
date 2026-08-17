@@ -2,14 +2,18 @@
 
 #include <thread>
 #include <chrono>
-#include <bitset>
+#include <optional>
 #include <string>
+
+#include <imfilebrowser.h>
 
 #include <toolsmenu/DebugModules/DebugModule.h>
 #include <toolsmenu/TristateCheckbox.h>
+#include <reversiblehooks/ReversibleHook/Enums/HookType.h>
 
 #include "RListDefs.h"
 #include "HookFilter.h"
+#include "HooksExport.hpp"
 #include "RListBuilder.h"
 
 namespace ReversibleHooks {
@@ -19,6 +23,7 @@ class HookCategory;
 namespace RHDebugModule {
 class HooksDebugModule final : public DebugModule {
     using HookState   = ReversibleHooks::ReversibleHook::TwoWayHookState;
+    using HookType    = ReversibleHooks::ReversibleHook::HookType;
     using FilterClock = std::chrono::steady_clock;
 
 public:
@@ -28,7 +33,7 @@ public:
     void RenderWindow() override final;
     void RenderMenuEntry() override final;
 
-    void OnDeserialized() override final { m_Filter.Changed = true; }
+    void OnDeserialized() override final;
 
     NOTSA_IMPLEMENT_DEBUG_MODULE_SERIALIZATION(HooksDebugModule, m_IsOpen, m_Filter);
 
@@ -38,15 +43,20 @@ private:
 
     void UpdateSlideSetterMode();
 
-    template<std::predicate<HookState> SetStateFn, std::predicate<> RestoreStateFn>
+    template<
+        std::predicate<HookState> SetStateFn,
+        std::predicate<>          RestoreStateFn,
+        std::invocable            RenderExtraCtxMenuItemsFn
+    >
     bool StateChanger(
-        const char*              title,
-        bool                     disabled,
-        ImGui::ImTristate        onOffCheckboxState,
-        std::optional<HookState> current,
-        HookState                next,
-        SetStateFn&&             SetState,
-        RestoreStateFn&&         RestoreState
+        const char*                      title,
+        bool                             disabled,
+        ImGui::ImTristate                onOffCheckboxState,
+        std::optional<HookState>         current,
+        HookState                        next,
+        SetStateFn&&                     SetState,
+        RestoreStateFn&&                 RestoreState,
+        RenderExtraCtxMenuItemsFn&&      RenderExtraCtxMenuItems
     );
 
     void FilteringThread();
@@ -55,8 +65,9 @@ private:
 
     void RenderFilter();
     void RenderMenuBar();
-    void RenderHooksSection();
-    void RenderFooter();
+    void RenderHooksSection(bool isFiltering);
+    void RenderFooter(bool isFiltering);
+    void RenderHooksExport();
 
     bool RenderCategoryItems(RListCategory& cat);
     enum class RenderCategoryResult {
@@ -67,6 +78,8 @@ private:
         SKIPPED_CLOSED,                  //!< Category's tree node was closed
     };
     RenderCategoryResult RenderCategory(RListCategory& cat);
+
+    void RenderExportHooks();
 
 private:
     bool m_IsOpen{};
@@ -87,11 +100,10 @@ private:
         std::optional<FilterClock::time_point> RunAt{};
         std::string                            Input{};
         HookFilter::Cutoffs                    Cutoffs{};
-        bool                                   ShowScores{};
         bool                                   CaseSensitive{};
         bool                                   Changed{};
 
-        NLOHMANN_DEFINE_TYPE_INTRUSIVE(FilterOptions, Input, Cutoffs, ShowScores, CaseSensitive);
+        NLOHMANN_DEFINE_TYPE_INTRUSIVE(FilterOptions, Input, Cutoffs, CaseSensitive);
     } m_Filter;
 
     struct SlideSetter {
@@ -106,15 +118,12 @@ private:
     } m_SlideSetter{};
 
     struct {
-        RListBuilder   Builder;
-        RListCategory* RootCategory; //!< Data is owned by the `Builder`
+        RListBuilder          Builder;
+        RListBuilder::Options BuilderOpts{};
+        RListCategory*        RootCategory; //!< Data is owned by the `Builder`
     } m_RenderList{};
 
-    struct HooksExport {
-        std::bitset<+HookState::Count> SelectedStates{};        //< States to export
-        bool                           ExcludeSelectedStates{}; //!< Exclude (instead of including) the selected states
-        bool                           OnlyFiltered{};          //!< Export only items that match the current filter (Or all, if no filter)
-    } m_HooksExport;
+    HooksExport m_HooksExport{};
 };
 }; // namespace RHDebugModule
 

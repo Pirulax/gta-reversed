@@ -17,7 +17,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(TwoWayHookState, {
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
 
-std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::TwoWayHookState state) {
+inline std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::TwoWayHookState state) {
     using State = ReversibleHooks::ReversibleHook::TwoWayHookState;
     switch (state) {
     case State::Unhooked:       return "Unhooked";

@@ -7,6 +7,7 @@
 
 #include <imgui.h>
 #include <libs/imgui/misc/cpp/imgui_stdlib.h>
+#include <imfilebrowser.h>
 
 #include <TristateCheckbox.h>
 
@@ -162,66 +163,92 @@ const char* GetTypeSymbolUI(const ReversibleHooks::HookCategoryItem& i) noexcept
 
 template<
     std::predicate<HookState> SetStateFn,
-    std::predicate<>          RestoreStateFn>
+    std::predicate<>          RestoreStateFn,
+    std::invocable            RenderExtraCtxMenuItemsFn>
 bool HooksDebugModule::StateChanger(
-    const char*              title,
-    bool                     disabled,
-    ImTristate               onOffCheckboxState,
-    std::optional<HookState> current,
-    HookState                next,
-    SetStateFn&&             SetState,
-    RestoreStateFn&&         RestoreState
+    const char*                 title,
+    bool                        disabled,
+    ImTristate                  onOffCheckboxState,
+    std::optional<HookState>    current,
+    HookState                   next,
+    SetStateFn&&                SetState,
+    RestoreStateFn&&            RestoreState,
+    RenderExtraCtxMenuItemsFn&& RenderExtraCtxMenuItems
 ) {
-    notsa::ui::ScopedID      idg{ "state" };
+    notsa::ui::ScopedID      idg{ "StateChanger" };
     notsa::ui::ScopedDisable sdg{ disabled };
 
     bool changed = false;
 
-    SameLine(); 
-    if (bool checked; CheckboxTristate("##on-off", onOffCheckboxState, checked)) {
-        if (checked) {
-            changed |= RestoreState();
-        } else {
-            changed |= SetState(HookState::Unhooked);
-        }
-    }
-
-    const auto a = (int32)(GetStyle().Colors[ImGuiCol_Button].w * 255.f);
-    PushStyleColor(
-        ImGuiCol_Button,
-        current.transform([a] (HookState state) {
-            switch (state) {
-            case HookState::Unhooked:       return IM_COL32(127, 0, 0, a);  // Red
-            case HookState::RedirectToGTA:  return IM_COL32(69, 69, 69, a); // Dark gray
-            case HookState::RedirectToOurs: return IM_COL32(0, 127, 0, a);  // Green
-            default:                        NOTSA_UNREACHABLE_CASE(state);
-            }
-        }).value_or(IM_COL32(127, 127, 0, a)) // yellow for mixed
-    );
-
     SameLine();
-    if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
-        changed |= SetState(next);
-    }
-    if (IsItemHovered()) {
-        const auto id = ImGui::GetID("setter");
-        if (m_SlideSetter.LastUsedOnID != id) {
-            const auto used = HandleSlideSetterForItem(current, next, SetState);
-            if (used) {
-                m_SlideSetter.LastUsedOnID = id;
+    BeginGroup();
+    {
+        Selectable("##selectable", false, ImGuiSelectableFlags_AllowItemOverlap);
+
+        if (BeginPopupContextItem("state_context")) {
+            if (MenuItem("Set to Our")) {
+                changed |= SetState(HookState::RedirectToOurs);
             }
-            changed |= used;
+            if (MenuItem("Set to GTA")) {
+                changed |= SetState(HookState::RedirectToGTA);
+            }
+            if (MenuItem("Set to Unhooked")) {
+                changed |= SetState(HookState::Unhooked);
+            }
+            if (MenuItem("Restore previous state")) {
+                changed |= RestoreState();
+            }
+            RenderExtraCtxMenuItems();
+            EndPopup();
         }
-        SetTooltip(
-            "Left click: Redirect to Our/GTA code\n"
-            "Middle click: Toggle (Slide setter)\n"
-            "Right click + hold: Slide setter (Enable/disable all hovered items)\n"
+
+        SameLine(); 
+        if (bool checked; CheckboxTristate("##on-off", onOffCheckboxState, checked)) {
+            if (checked) {
+                changed |= RestoreState();
+            } else {
+                changed |= SetState(HookState::Unhooked);
+            }
+        }
+
+        const auto a = (int32)(GetStyle().Colors[ImGuiCol_Button].w * 255.f);
+        PushStyleColor(
+            ImGuiCol_Button,
+            current.transform([a] (HookState state) {
+                switch (state) {
+                case HookState::Unhooked:       return IM_COL32(127, 0, 0, a);  // Red
+                case HookState::RedirectToGTA:  return IM_COL32(69, 69, 69, a); // Dark gray
+                case HookState::RedirectToOurs: return IM_COL32(0, 127, 0, a);  // Green
+                default:                        NOTSA_UNREACHABLE_CASE(state);
+                }
+            }).value_or(IM_COL32(127, 127, 0, a)) // yellow for mixed
         );
-    }
-    PopStyleColor();
 
-    SameLine();
-    TextUnformatted(title);
+        SameLine();
+        if (Button(current.has_value() ? StateToString(*current) : "mixed", STATE_BUTTON_SIZE) && !disabled) {
+            changed |= SetState(next);
+        }
+        if (IsItemHovered()) {
+            const auto id = ImGui::GetID("setter");
+            if (m_SlideSetter.LastUsedOnID != id) {
+                const auto used = HandleSlideSetterForItem(current, next, SetState);
+                if (used) {
+                    m_SlideSetter.LastUsedOnID = id;
+                }
+                changed |= used;
+            }
+            SetTooltip(
+                "Left click: Redirect to Our/GTA code\n"
+                "Middle click: Toggle (Slide setter)\n"
+                "Right click + hold: Slide setter (Enable/disable all hovered items)\n"
+            );
+        }
+        PopStyleColor();
+
+        SameLine();
+        TextUnformatted(title);
+    }
+    EndGroup();
 
     return changed;
 }
@@ -229,16 +256,15 @@ bool HooksDebugModule::StateChanger(
 void HooksDebugModule::RenderMenuBar() {
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("Tools")) {
-            if (ImGui::MenuItem("Export hooks.csv")) {
-                const auto path = fs::weakly_canonical("hooks.csv");
-                ReversibleHooks::RHManager::GetInstance().WriteHooksToFile(path);
-                NOTSA_LOG_INFO("Exported hooks to {:?}", path.string());
+            if (ImGui::MenuItem("Export Hooks", "CTRL + S")) {
+                if (m_RenderList.RootCategory) { // Should never be null here, but just in case
+                    m_HooksExport.Open(*m_RenderList.RootCategory);
+                }
             }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Options")) {
             if (ImGui::BeginMenu("Filter")) {
-                m_Filter.Changed |= Checkbox("Show Filter Scores", &m_Filter.ShowScores);
                 m_Filter.Changed |= Checkbox("Case Sensitive", &m_Filter.CaseSensitive);
                 if (BeginMenu("Cutoffs")) {
                     const auto CutoffSlider = [&](float* value, const char* name) {
@@ -254,6 +280,17 @@ void HooksDebugModule::RenderMenuBar() {
                         m_Filter.Changed = true;
                     }
                     ImGui::EndMenu();
+                }
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Tree")) {
+                bool changed = false;
+                changed |= ImGui::Checkbox("Display item address", &m_RenderList.BuilderOpts.DisplayTitleWithItemAddress);
+                changed |= ImGui::Checkbox("Display filter scores", &m_RenderList.BuilderOpts.DisplayTitleWithFilterScores);
+                if (changed) {
+                    if (m_RenderList.RootCategory) { // Shouldn't be null here, but just in case
+                        m_RenderList.Builder.UpdateList(*m_RenderList.RootCategory, m_RenderList.BuilderOpts);
+                    }
                 }
                 ImGui::EndMenu();
             }
@@ -284,9 +321,7 @@ bool HooksDebugModule::RenderCategoryItems(RListCategory& cat) {
 
         // State checkbox
         changed |= StateChanger(
-            m_Filter.ShowScores
-                ? std::format("{} (Score: {})", item.Ptr->GetName(), item.FilterScore).c_str()
-                : item.Ptr->GetName().c_str(),
+            item.DisplayTitle.c_str(),
             item.Ptr->GetIsStateLocked(),
             item.Ptr->GetState() == HookState::Unhooked
                 ? ImTristate::NONE
@@ -296,7 +331,21 @@ bool HooksDebugModule::RenderCategoryItems(RListCategory& cat) {
                 ? HookState::RedirectToGTA
                 : HookState::RedirectToOurs,
             [&] (HookState s) { return item.Ptr->SetState(s); },
-            [&] () { return item.Ptr->SetToPreviousState(); }
+            [&] { return item.Ptr->SetToPreviousState(); },
+            [&] {
+                if (MenuItem("Copy name")) {
+                    SetClipboardText(item.Ptr->GetName().c_str());
+                }
+                const auto Addr2Clipboard = [](void* addr) {
+                    SetClipboardText(std::format("{}", addr).c_str());
+                };
+                if (MenuItem("Copy our address")) {
+                    Addr2Clipboard(item.Ptr->GetHookAddressOur());
+                }
+                if (MenuItem("Copy GTA address")) {
+                    Addr2Clipboard(item.Ptr->GetHookAddressGTA());
+                }
+            }
         );
 
         if (IsItemHovered()) {
@@ -349,13 +398,16 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
         bool                                            hasAnyUnhooked,
         ReversibleHooks::HookCategory::CommonItemsState commonState,
         HookState                                       next,
-        auto&&                                          SetState,
-        auto&&                                          RestoreState
+        std::invocable<HookState> auto&&                SetState,
+        std::invocable<> auto&&                         RestoreState,
+        std::invocable<> auto&&                         OpenExportHooks
     ) {
         // TODO/NOTE: The Tree's label is a workaround for when the label is shorter than the visual checkbox (otherwise the checkbox can't be clicked)
-        const auto open = TreeNodeEx("##         ", ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanFullWidth);
-        
-        SameLine();
+        //const auto open = TreeNodeEx("##         ", ImGuiTreeNodeFlags_AllowItemOverlap | ImGuiTreeNodeFlags_FramePadding | ImGuiTreeNodeFlags_SpanFullWidth);
+
+        AlignTextToFramePadding(); 
+        const auto open = TreeNodeEx("##node", ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_AllowOverlap);
+
         changed |= StateChanger(
             label,
             disabled,
@@ -367,7 +419,12 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
             commonState,
             next,
             SetState,
-            RestoreState
+            RestoreState,
+            [&] {
+                if (MenuItem("Export")) {
+                    OpenExportHooks();
+                }
+            }
         );
 
         return open;
@@ -393,41 +450,34 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
     }
 
     if (TreeNodeWithCheckbox(
-        m_Filter.ShowScores
-            ? std::format(
-                "{} [Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, All: {:.2f}}}", cat.Category->Name(),
-                cat.FilterScore,
-                cat.MaxFilterScoreOwnItems,
-                cat.MaxFilterScoreSubItems,
-                cat.MaxScoreAllItems,
-                cat.MaxFilterScoreSubCats,
-                cat.MaxFilterScore
-              ).c_str()
-            : cat.Category->Name().c_str(),
+        cat.DisplayTitle.c_str(),
         !cat.AnyUnlockedItems,
         cat.AnyUnhookedItems,
         cat.CommonStateAllItems,
         cat.CommonStateAllItems.value_or(cat.LastSetAllItemsState.value_or(HookState::RedirectToOurs)) == HookState::RedirectToOurs
             ? HookState::RedirectToGTA
             : HookState::RedirectToOurs,
-        [&] (HookState state) -> bool {
+        [&] (HookState state) -> bool { // Set state of all items and sub-categories
             cat.LastSetAllItemsState = state;
-            return [&, state](this auto&& Self, RListCategory& c) -> bool { // Set state of all items and sub-categories using a recursive lambda
+            return [&, state](this auto&& Self, RListCategory& c) -> bool {
                 bool changed = SetCategoryOwnItemsState(c, state);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc);
+                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc, m_RenderList.BuilderOpts); // Also update category if it has changed
                 }
                 return changed;
             }(cat);
         },
-        [&] () -> bool {
-            return [&](this auto&& Self, RListCategory& c) -> bool { // Restore state of all items and sub-categories using a recursive lambda
+        [&] () -> bool { // Restore state of all items and sub-categories
+            return [&](this auto&& Self, RListCategory& c) -> bool {
                 bool changed = RestoreCategoryOwnItemsState(c);
                 for (auto& sc : c.Categories) {
-                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc);
+                    changed |= Self(sc) && m_RenderList.Builder.UpdateCategory(sc, m_RenderList.BuilderOpts); // Also update category if it has changed
                 }
                 return changed;
             }(cat);
+        },
+        [&] () { // Open export hooks for this category
+            m_HooksExport.Open(cat, false);
         }
     )) {
         const auto hasSubCategoriesToShow = !cat.Categories.IsEmpty() && (IsMatchingScoreOrNone(cat.MaxFilterScoreSubCats) || IsMatchingScoreOrNone(cat.MaxFilterScoreSubItems));
@@ -442,9 +492,7 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
                     }
                 }
                 if (TreeNodeWithCheckbox(
-                    m_Filter.ShowScores
-                        ? std::format("Hooks [Max filter score: {}]", cat.MaxFilterScoreOwnItems).c_str()
-                        : "Hooks",
+                    "Hooks",
                     !cat.AnyUnlockedOwnItems,
                     cat.AnyUnhookedOwnItems,
                     cat.CommonStateOwnItems,
@@ -457,6 +505,9 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
                     },
                     [&] () -> bool {
                         return RestoreCategoryOwnItemsState(cat);
+                    },
+                    [&] () { // Open export hooks for the items of the category
+                        m_HooksExport.Open(cat, true);
                     }
                 )) {
                     itemsStateChanged |= RenderCategoryItems(cat);
@@ -480,7 +531,7 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
 
     // Now check if we've changed, and if so, check if that change affects the state of the parent
     if (changed) {
-        changed &= m_RenderList.Builder.UpdateCategory(cat);
+        changed &= m_RenderList.Builder.UpdateCategory(cat, m_RenderList.BuilderOpts);
     }        
 
     return changed
@@ -488,14 +539,15 @@ auto HooksDebugModule::RenderCategory(RListCategory& cat) -> RenderCategoryResul
         : RenderCategoryResult::RENDERED;
 }
 
-void HooksDebugModule::RenderHooksSection() {
+void HooksDebugModule::RenderHooksSection(bool isFiltering) {
     notsa::ui::ScopedChild c{ "HooksScrollableSection", ImVec2(0.0f, -GetFrameHeightWithSpacing()), ImGuiChildFlags_None, ImGuiWindowFlags_HorizontalScrollbar };
 
-    std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
-    if (lock.owns_lock()) {
+    if (isFiltering) {
+        notsa::ui::WindowCenteredTextUnformatted("Interaction disabled, filtering in progress...");
+    } else {
         switch (RenderCategory(*m_RenderList.RootCategory)) {
         case RenderCategoryResult::RENDERED_CATEGORY_STATE_CHANGED: {
-            m_RenderList.Builder.UpdateCategory(*m_RenderList.RootCategory);
+            m_RenderList.Builder.UpdateCategory(*m_RenderList.RootCategory, m_RenderList.BuilderOpts);
             break;
         }
         case RenderCategoryResult::SKIPPED_FILTERED: {
@@ -503,19 +555,25 @@ void HooksDebugModule::RenderHooksSection() {
             break;
         }
         }
-        m_FilterProcessor.NeedToAckFinished = false;
+    }
+
+}
+
+void HooksDebugModule::RenderFooter(bool isFiltering) {
+    if (isFiltering) {
+        TextUnformatted("Status: Filtering...");
     } else {
-        notsa::ui::WindowCenteredTextUnformatted("Filtering in progress...");
+        Text("Filtering took %lld ms", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.FinishedAt - m_FilterProcessor.StartedAt).count()));
     }
 }
 
-void HooksDebugModule::RenderFooter() {
-    std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
-    if (lock.owns_lock()) {
-        Text("Filtering took %lld ms", static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(m_FilterProcessor.FinishedAt - m_FilterProcessor.StartedAt).count()));
-    } else {
-        TextUnformatted("Status: Filtering...");
+void HooksDebugModule::RenderHooksExport() {
+    if (Shortcut(ImGuiMod_Ctrl | ImGuiKey_S)) {
+        if (m_RenderList.RootCategory) { // Should never be null here, but just in case
+            m_HooksExport.Open(*m_RenderList.RootCategory);
+        }
     }
+    m_HooksExport.Render();
 }
 
 void HooksDebugModule::RenderWindow() {
@@ -525,25 +583,51 @@ void HooksDebugModule::RenderWindow() {
     }
 
     if (!m_RenderList.RootCategory) {
-        m_RenderList.RootCategory = m_RenderList.Builder.ConstructList(ReversibleHooks::RHManager::GetInstance().GetRootCategory());
+        VERIFY(m_RenderList.RootCategory = m_RenderList.Builder.ConstructList(
+            ReversibleHooks::RHManager::GetInstance().GetRootCategory(),
+            m_RenderList.BuilderOpts
+        ));
     }
 
     UpdateSlideSetterMode();
 
-    RenderMenuBar();
-    RenderFilter();
-    Separator();
-    RenderHooksSection();
-    Separator();
-    RenderFooter();
+    {
+        const std::unique_lock lock{ m_FilterProcessor.Mtx, std::try_to_lock };
+        const auto isFilteringInProgress = !lock.owns_lock();
+        const notsa::ui::ScopedDisable sdg{ isFilteringInProgress };
+
+        if (m_FilterProcessor.NeedToAckFinished) {
+            if (m_RenderList.BuilderOpts.DisplayTitleWithFilterScores) {
+                m_RenderList.Builder.UpdateList(*m_RenderList.RootCategory, m_RenderList.BuilderOpts); // Need to update because filter scores have changed
+            }
+        }
+
+        RenderMenuBar();
+        RenderFilter();
+        Separator();
+        RenderHooksSection(isFilteringInProgress);
+        Separator();
+        RenderFooter(isFilteringInProgress);
+
+        RenderHooksExport();
+    }
 
     CheckNeedsToRunFilter();
+
+    m_FilterProcessor.NeedToAckFinished = false;
 }
 
 void HooksDebugModule::RenderMenuEntry() {
     notsa::ui::DoNestedMenuIL({ "Settings" }, [&] {
         ImGui::MenuItem("Hooks", nullptr, &m_IsOpen);
     });
+}
+
+void HooksDebugModule::OnDeserialized() {
+    if (m_RenderList.BuilderOpts != RListBuilder::Options{}) {
+        m_RenderList.Builder.UpdateList(*m_RenderList.RootCategory, m_RenderList.BuilderOpts);
+    }
+    m_Filter.Changed = true;
 }
 
 };

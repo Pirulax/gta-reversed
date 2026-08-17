@@ -2,6 +2,7 @@
 
 #include "HookFilter.h"
 #include "RListBuilder.h"
+#include <extensions/CustomFormatters.hpp>
 
 namespace RHDebugModule {
 RListBuilder::RListBuilder(
@@ -12,10 +13,10 @@ RListBuilder::RListBuilder(
     m_PoolCategory{ maxCategories } {
 }
 
-RListCategory* RListBuilder::ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> from) noexcept {
+RListCategory* RListBuilder::ConstructList(std::shared_ptr<ReversibleHooks::HookCategory> from, const Options& opts) noexcept {
     ZoneScoped;
 
-    const auto RecursiveConstruct = [this](this auto& RecursiveConstruct, std::shared_ptr<ReversibleHooks::HookCategory> cat) -> RListCategory& {
+    const auto RecursiveConstruct = [this, &opts](this auto& RecursiveConstruct, std::shared_ptr<ReversibleHooks::HookCategory> cat) -> RListCategory& {
         RListCategory* out = new (m_PoolCategory.New()) RListCategory{
             .Category{ std::move(cat) },
         };
@@ -35,11 +36,11 @@ RListCategory* RListBuilder::ConstructList(std::shared_ptr<ReversibleHooks::Hook
             auto* const lsc = out->Categories.AppendItem(
                 &RecursiveConstruct(std::move(sc))
             );
-            UpdateCategory(*lsc);
+            UpdateCategory(*lsc, opts);
         }
         out->NumCategoriesIgnored = out->Category->SubCategories().size() - out->Categories.GetSize();
 
-        UpdateCategory(*out);
+        UpdateCategory(*out, opts);
 
         return *out;
     };
@@ -47,7 +48,7 @@ RListCategory* RListBuilder::ConstructList(std::shared_ptr<ReversibleHooks::Hook
     return &RecursiveConstruct(std::move(from));
 }
 
-bool RListBuilder::UpdateCategory(RListCategory& cat) const noexcept {
+bool RListBuilder::UpdateCategory(RListCategory& cat, const Options& opts) const noexcept {
     ZoneScoped;
 
     const auto prevAnyUnhookedItems    = std::exchange(cat.AnyUnhookedItems, false);
@@ -64,13 +65,51 @@ bool RListBuilder::UpdateCategory(RListCategory& cat) const noexcept {
             : std::nullopt;
     };
 
+    // Update category Display Title
+    {
+        cat.DisplayTitle.clear();
+        std::format_to(std::back_inserter(cat.DisplayTitle), "{}", cat.Category->Name());
+        if (opts.DisplayTitleWithFilterScores) {
+            std::format_to(
+                std::back_inserter(cat.DisplayTitle),
+                " [Max filter scores: {{Own: {:.2f}, OwnItems: {:.2f}, SubItems: {:.2f}, AllItems: {:.2f}, SubCats: {:.2f}, Max: {:.2f}}}",
+                cat.FilterScore,
+                cat.MaxFilterScoreOwnItems,
+                cat.MaxFilterScoreSubItems,
+                cat.MaxScoreAllItems,
+                cat.MaxFilterScoreSubCats,
+                cat.MaxFilterScore
+            );
+        }
+    }
+
     assert((cat.Items.GetSize() == cat.Category->Items().size()) && "New items were added, the code doesn't account for them!");
     if (!cat.Items.IsEmpty()) {
         cat.CommonStateOwnItems = cat.Items.GetHead()->Ptr->GetState();
         for (auto& item : cat.Items) {
-            cat.CommonStateOwnItems = GetCommonState(cat.CommonStateOwnItems, item.Ptr->GetState());
-            cat.AnyUnhookedOwnItems |= item.Ptr->GetState() == HookState::Unhooked;
-            cat.AnyUnlockedOwnItems |= !item.Ptr->GetIsStateLocked();
+            // Update common states
+            {
+                cat.CommonStateOwnItems = GetCommonState(cat.CommonStateOwnItems, item.Ptr->GetState());
+                cat.AnyUnhookedOwnItems |= item.Ptr->GetState() == HookState::Unhooked;
+                cat.AnyUnlockedOwnItems |= !item.Ptr->GetIsStateLocked();
+            }
+
+            // Update Display Title
+            {
+                item.DisplayTitle.clear();
+                std::format_to(std::back_inserter(item.DisplayTitle), "{}", item.Ptr->GetName());
+                if (opts.DisplayTitleWithFilterScores) {
+                    std::format_to(std::back_inserter(item.DisplayTitle), " [Filter score: {:.2f}]", item.FilterScore);
+                }
+                if (opts.DisplayTitleWithItemAddress) {
+                    if (const auto a = item.Ptr->GetHookAddressGTA()) {
+                        std::format_to(std::back_inserter(item.DisplayTitle), " [GTA: {:p}]", a);
+                    }
+                    if (const auto a = item.Ptr->GetHookAddressOur()) {
+                        std::format_to(std::back_inserter(item.DisplayTitle), " [Our: {:p}]", a);
+                    }
+                }
+            }
         }
         cat.AnyUnhookedItems |= cat.AnyUnhookedOwnItems;
         cat.AnyUnlockedItems |= cat.AnyUnlockedOwnItems;

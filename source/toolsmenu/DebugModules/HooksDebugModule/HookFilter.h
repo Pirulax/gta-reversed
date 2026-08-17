@@ -3,7 +3,6 @@
 #include <optional>
 #include <string>
 #include <string_view>
-#include <boost/static_string.hpp>
 
 namespace RHDebugModule {
 class HookFilter {

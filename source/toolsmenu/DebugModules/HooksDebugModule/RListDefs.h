@@ -2,6 +2,8 @@
 
 #include <optional>
 
+#include <boost/static_string.hpp>
+
 #include <reversiblehooks/HookCategory.h>
 #include <reversiblehooks/HookCategoryItem.h>
 
@@ -17,12 +19,14 @@ inline bool IsMatchingScoreOrNone(const std::optional<float>& score, float cutof
 }
 
 struct RListCategoryItem : ListItem_c<RListCategoryItem> {
-    std::optional<float>                               FilterScore{}; //!< Filter score of this item
-    std::shared_ptr<ReversibleHooks::HookCategoryItem> Ptr{};         //!< Ptr to original item
+    std::optional<float>                               FilterScore{};  //!< Filter score of this item
+    std::shared_ptr<ReversibleHooks::HookCategoryItem> Ptr{};          //!< Ptr to original item
+    boost::static_string<256>                          DisplayTitle{}; //!< Rendered title of this item (Including any extra stuff like scores, etc if enabled)
 };
 
 struct RListCategory : ListItem_c<RListCategory> {
-    std::shared_ptr<ReversibleHooks::HookCategory> Category{}; //!< Ptr to original category
+    std::shared_ptr<ReversibleHooks::HookCategory> Category{};     //!< Ptr to original category
+    boost::static_string<256>                      DisplayTitle{}; //!< Rendered title of this item (Including any extra stuff like scores, etc if enabled)
 
     std::optional<float>                           FilterScore{};            //!< Filter score of this category
     std::optional<float>                           MaxFilterScoreSubCats{};  //!< Only score of categories, not including their items
