@@ -14,9 +14,6 @@ namespace ReversibleHook {
 template<typename T>
     requires std::is_class_v<T>
 struct VirtualDestructorHook final : public VirtualHook {
-private:
-    static constexpr auto DESTRUCTOR_VMT_INDEX = 0;
-
 public:
     /*!
      * @brief Constructor for hooking virtual destructors where the direct call and virtual functions aren't the same (For example destructors vs deleting virtual destructor)
@@ -31,9 +28,9 @@ public:
     ) :     
         VirtualHook{  
             "Destructor",
-            vmtInfoOur.GetEntryAddressAt(DESTRUCTOR_VMT_INDEX),
+            vmtInfoOur.GetEntryAddressAt(Utility::VMTInfo::DESTRUCTOR_VMT_INDEX),
             Utility::GetScalarDestructorAddress<T>(),
-            vmtInfoGTA.GetEntryAddressAt(DESTRUCTOR_VMT_INDEX),
+            vmtInfoGTA.GetEntryAddressAt(Utility::VMTInfo::DESTRUCTOR_VMT_INDEX),
             fnAddressGTA
         }
     {

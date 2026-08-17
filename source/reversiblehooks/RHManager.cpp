@@ -1,8 +1,10 @@
 #include "StdInc.h"
 
-#include <extensions/CommandLine.h>
-
+#ifdef NOTSA_STANDALONE
+#include "ReversibleHook/NullHook.h"
+#else
 #include "ReversibleHook/VirtualHook.h"
+#endif
 #include "ReversibleHook/ScriptCommandHook.h"
 #include "RHManager.h"
 
@@ -38,7 +40,6 @@ auto RHManager::SetCategoryOrItemStateByPath(std::string_view path, bool enabled
 }
 
 void RHManager::CheckAll() {
-    return;
     if (const auto now = HooksCheckClock::now(); now - m_LastHooksCheckTime > HOOKS_CHECK_INTERVAL) {
         m_LastHooksCheckTime = now;
         m_RootHookCategory->ForEachItem([](HookCategoryItem& item) {
@@ -77,6 +78,13 @@ void RHManager::InstallVirtual(
     void*              fnAddressGTA,
     HookInstallOptions opt
 ) {
+#ifdef NOTSA_STANDALONE
+    AddHookToCategory(category, opt, std::make_shared<ReversibleHook::NullHook>(
+        std::move(fnName),
+        fnAddressOur,
+        fnAddressGTA
+    ));
+#else
     const auto idx = vmtInfoGTA.FindIndexOf(fnAddressGTA);
     // We can't do `vmtInfoOur.FindIndexOf(fnAddressOur)` because `fnAddressOur` points to the thunk, while the address in the VMT is pointing to the actual function
 
@@ -93,6 +101,7 @@ void RHManager::InstallVirtual(
             vmtInfoGTA.GetEntryAddressAt(idx)
         ));
     }
+#endif
 }
 
 void RHManager::AddHookToCategory(std::string_view path, HookInstallOptions opt, std::shared_ptr<ReversibleHook::TwoWayHook> hook) {
@@ -110,7 +119,7 @@ void RHManager::InstallScriptCommand(std::string_view path, eScriptCommands cmd,
     AddHookToCategory(
         path,
         opt,
-        std::make_shared<::ReversibleHooks::ReversibleHook::ScriptCommandHook>(cmd)
+        std::make_shared<ReversibleHook::ScriptCommandHook>(cmd) // This can stay a regular hook even in standalone, because it doesn't access the game in any way
     );
 }
 #endif

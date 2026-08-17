@@ -14,6 +14,7 @@ enum class HookType {
     VirtualDestructor,
     ScriptCommand,
     VMTRedirect,
+    Null,
 
     Count
 };
@@ -23,7 +24,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(HookType, {
     { HookType::Virtual,           "VIRTUAL"            },
     { HookType::VirtualDestructor, "VIRTUAL_DESTRUCTOR" },
     { HookType::ScriptCommand,     "SCRIPT_COMMAND"     },
-    { HookType::VMTRedirect,       "VMT_REDIRECT"       }
+    { HookType::VMTRedirect,       "VMT_REDIRECT"       },
+    { HookType::Null,               "NULL"              }, 
 });
 }; // namespace ReversibleHook
 }; // namespace ReversibleHooks
@@ -37,6 +39,7 @@ inline std::optional<const char*> EnumToString(ReversibleHooks::ReversibleHook::
     case VirtualDestructor: return "VirtualDestructor";
     case ScriptCommand:     return "ScriptCommand";
     case VMTRedirect:       return "VMTRedirect";
+    case Null:              return "Null";
     default:                return std::nullopt;
     }
 }

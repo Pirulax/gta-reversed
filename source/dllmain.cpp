@@ -1,14 +1,10 @@
 #include "StdInc.h"
-#include "config.h"
 #include <cstdlib>
 #include <app_debug.h>
-#include "WinPlatform.h"
 #include "extensions/CommandLine.h"
 #include "extensions/debug.hpp"
 #include "extensions/Configuration.hpp"
-#include "reversiblehooks/RootHookCategory.h"
-
-void InjectHooksMain(HMODULE hThisDLL);
+#include "InjectHooksMain.h"
 
 static constexpr auto DEFAULT_INI_FILENAME = "gta-reversed.ini";
 
@@ -52,7 +48,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
         LoadConfigurations();
 
         ReversibleHooks::RHManager::CreateInstance();
-        InjectHooksMain(hModule);
+        InjectHooksMain();
 
         break;
     }

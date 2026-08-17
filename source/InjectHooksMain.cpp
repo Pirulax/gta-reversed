@@ -526,14 +526,15 @@
 #include <RealTimeShadowManager.h>
 
 #include "extensions/utility.hpp"
-#include "extensions/CommandLine.h"
 #include <RenderBuffer.hpp>
 
-#include "reversiblehooks/RootHookCategory.h"
-
+#ifndef NOTSA_STANDALONE
 #include "WindowedMode.hpp"
+#endif
 
 void InjectHooksMain() {
+    const auto now = std::chrono::high_resolution_clock::now();
+
     /**
     * We have `NOTSA_STANDALONE` macro to be able to dump all hooks without actually writing to memory,
     * it is used by the CI to automatically update the docs.
@@ -1456,16 +1457,11 @@ void InjectHooksMain() {
     Interior();
     Scripts();
 
+    NOTSA_LOG_INFO("InjectedHooksMain(): Finished in {} ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - now).count());
+
+    CommandLine::PostHooksInjected();
+
 #if _DEBUG
     CCurves::TestCurves();
 #endif
-}
-
-void InjectHooksMain(HMODULE hThisDLL) {
-    ZoneScoped;
-
-    const auto now = std::chrono::high_resolution_clock::now();
-    InjectHooksMain();
-    CommandLine::PostHooksInjected();
-    NOTSA_LOG_INFO("Injected hooks in {} ms", std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - now).count());
 }

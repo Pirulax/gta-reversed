@@ -538,19 +538,20 @@ INT WINAPI WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, I
     notsa::debug::DisplayConsole();
     notsa::debug::LoadSymbols();
     notsa::Logging::CreateInstance();
+    notsa::ScopeGuard cleanupLogging{ [] {
+        notsa::Logging::DestroyInstance();
+        notsa::debug::UnloadSymbols();
+    } };
 
 #ifdef NOTSA_DUMP_HOOKS_ONLY
     ReversibleHooks::RHManager::CreateInstance();
-    NOTSA_LOG_INFO("Dumping hooks only, no memory writing will be performed");
-    if (CommandLine::s_DumpHooksPath.empty()) {
-        NOTSA_LOG_ERR("No path provided for dumping hooks, use `--dump-hooks-to` CLI argument");
-        return 1;
-    }
-    InjectHooksMain(GetModuleHandle(nullptr));
+    notsa::ScopeGuard cleanupRH{ [] {
+        ReversibleHooks::RHManager::DestroyInstance();
+    }};
 
-    ReversibleHooks::RHManager::DestroyInstance();
-    notsa::Logging::DestroyInstance();
-    notsa::debug::UnloadSymbols();
+    NOTSA_LOG_INFO("Dumping hooks only, no memory writing will be performed");
+
+    InjectHooksMain(); // This will also end up calling the CLI to dump the hooks
 
     return 0;
 #else

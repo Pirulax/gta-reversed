@@ -4,6 +4,9 @@ namespace ReversibleHooks {
 namespace Utility {
 class VMTInfo {
 public:
+    static constexpr auto DESTRUCTOR_VMT_INDEX = 0;
+
+public:
     VMTInfo(void** table, size_t size) :
         m_Table(table),
         m_Size(size)
@@ -41,6 +44,14 @@ public:
     void** GetEntryAddressAt(size_t idx) {
         assert(idx < m_Size);
         return &m_Table[idx];
+    }
+
+    /*!
+     * @return Get function pointer at index
+     */
+    void* GetFunctionAt(size_t idx) {
+        assert(idx < m_Size);
+        return m_Table[idx];
     }
 
     /*!

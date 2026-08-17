@@ -28,8 +28,8 @@ struct ScriptCommandHook final : public TwoWayHook {
     void     Check() override { /* nop */ }
     void     Serialize(json& j) const override { to_json(j, *this); }
 
-    void* GetHookAddressGTA() const noexcept override { return m_OriginalHandler; }
-    void* GetHookAddressOur() const noexcept override { return CRunningScript::CustomCommandHandlerOf(m_Command); }
+    void* GetHookAddressGTA() const noexcept override { return nullptr; }
+    void* GetHookAddressOur() const noexcept override { return m_OriginalHandler; }
 
 protected:
     void ApplyNewState(TwoWayHookState state, TwoWayHookState oldState) override {

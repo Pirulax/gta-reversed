@@ -19,11 +19,14 @@
 #include "HooksUtility.hpp"
 #include "RootHookCategory.h"
 #include "ReversibleHook/TwoWayHook.h"
-#include "ReversibleHook/VirtualDestructorHook.h"
-#include "ReversibleHook/StaticTwoWayHook.h"
 #include "ReversibleHook/Enums/TwoWayHookState.h"
 #include "VMTInfo.h"
 
+#ifdef NOTSA_STANDALONE
+#include "ReversibleHook/NullHook.h"
+#else
+#include "ReversibleHook/StaticTwoWayHook.h"
+#endif
 
 namespace ReversibleHooks {
 class RHManager : public notsa::Singleton<RHManager> {
@@ -123,7 +126,7 @@ public: // Script hooking functions //
     void InstallStatic(
         std::string_view   path,
         std::string        fnName,
-        uintptr_t          addressGTA,
+        uintptr_t          addressGTA, // NOTE: I'm lazy to fix this, but here the GTA address goes first
         T                  fnOur,
         HookInstallOptions opt = {}
     ) {
@@ -131,13 +134,25 @@ public: // Script hooking functions //
         if (opt.PreserveRegisters && !opt.StackArgumentsToPreserve.has_value()) {
             throw std::runtime_error(std::format("{}/{}: `PreserveRegisters` requires `StackArgumentsToPreserve` to be set!", path, fnName));
         }
-        AddHookToCategory(path, opt, std::make_shared<ReversibleHook::StaticTwoWayHook>(
+
+        const auto ptrAddressOur = Utility::FunctionToVoidPtr(fnOur),
+                   ptrAddressGTA = std::bit_cast<void*>(addressGTA);
+
+    #ifdef NOTSA_STANDALONE
+        AddHookToCategory(path, std::move(opt), std::make_shared<ReversibleHook::NullHook>(
             std::move(fnName),
-            Utility::FunctionToVoidPtr(fnOur),
-            std::bit_cast<void*>(addressGTA),
+            ptrAddressOur,
+            ptrAddressGTA
+        ));
+    #else
+        AddHookToCategory(path, std::move(opt), std::make_shared<ReversibleHook::StaticTwoWayHook>(
+            std::move(fnName),
+            ptrAddressOur,
+            ptrAddressGTA,
             opt.StackArgumentsToPreserve.value_or(0),
             opt.PreserveRegisters
         ));
+    #endif
     }
 
     /*!
@@ -206,11 +221,19 @@ public: // Script hooking functions //
         uintptr_t          addressGTA,
         HookInstallOptions opt = {}
     ) {
-        AddHookToCategory(path, opt, std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
+    #ifdef NOTSA_STANDALONE
+        AddHookToCategory(path, std::move(opt), std::make_shared<ReversibleHook::NullHook>(
+            "Destructor",
+            vmtInfoOur.GetFunctionAt(Utility::VMTInfo::DESTRUCTOR_VMT_INDEX),
+            (void*)(addressGTA)
+        ));
+    #else
+        AddHookToCategory(path, std::move(opt), std::make_shared<ReversibleHook::VirtualDestructorHook<T>>(
             vmtInfoOur,
             vmtInfoGTA,
             (void*)(addressGTA)
         ));
+    #endif
     }
 
     /*!
