@@ -1,3 +1,0 @@
-packages:
-  - path: contrib/conan/recipes/imgui-filebrowser
-  - path: .
