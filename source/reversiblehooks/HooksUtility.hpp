@@ -31,11 +31,16 @@ private:
 
 template<typename T>
 constexpr void* FunctionToVoidPtr(T fn) {
-    static_assert(sizeof(fn) == sizeof(void*), "Function pointer must fit into a `void*`");
+    static_assert(sizeof(fn) == sizeof(void*), "Function pointer must fit into a `void*`"); // Some member functions might be larger than this in some cases
     return std::bit_cast<void*>(fn);
 }
 
-/*!
+template<typename T>
+constexpr T VoidToFunctionPtr(void* p) {
+    return std::bit_cast<T>(p);
+}
+
+/*! 
  * @brief Copies memory from `src` to `dst`, temporarily changing the protection of the destination memory to allow writing.
  * @param dst The destination address to copy to.
  * @param src The source address to copy from.

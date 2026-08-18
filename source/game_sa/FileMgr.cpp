@@ -9,7 +9,6 @@
 
 #include "FileMgr.h"
 
-#include "HookSystem.h"
 #include "extensions/Configs/Miscellaneous.hpp"
 
 auto& user_tracks_dir_path = StaticRef<char[256]>(0xc92168);

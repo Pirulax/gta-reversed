@@ -3,7 +3,6 @@
 #ifdef NOTSA_WINDOWED_MODE
 
 #include "WindowedMode.hpp"
-#include <HookSystem.h>
 #include "PostEffects.h"
 
 #include "winincl.h"
@@ -387,8 +386,8 @@ struct D3D9ProxyDevice {
 
         // Save original pointers
         if (!std::exchange(Initialized, true)) {
-            Real_Reset       = VoidToFunctionPtr<D3D9Device_Reset_Type>(vmt[D3D9Device_Reset_VMT_Index]);
-            Real_SetViewport = VoidToFunctionPtr<D3D9Device_SetViewport_Type>(vmt[D3D9Device_SetViewport_VMT_Index]);
+            Real_Reset       = ReversibleHooks::Utility::VoidToFunctionPtr<D3D9Device_Reset_Type>(vmt[D3D9Device_Reset_VMT_Index]);
+            Real_SetViewport = ReversibleHooks::Utility::VoidToFunctionPtr<D3D9Device_SetViewport_Type>(vmt[D3D9Device_SetViewport_VMT_Index]);
         }
 
         // NOTE: Wine has this VMT write-protected, unlike Windows.
@@ -396,8 +395,8 @@ struct D3D9ProxyDevice {
         ReversibleHooks::Utility::ScopedVirtualProtectModify _{ vmt, vmtSize, PAGE_EXECUTE_READWRITE };
 
         // Overwrite vmt entries
-        vmt[D3D9Device_Reset_VMT_Index]       = FunctionToVoidPtr(&Proxy_Reset);
-        vmt[D3D9Device_SetViewport_VMT_Index] = FunctionToVoidPtr(&Proxy_SetViewport);
+        vmt[D3D9Device_Reset_VMT_Index]       = ReversibleHooks::Utility::FunctionToVoidPtr(&Proxy_Reset);
+        vmt[D3D9Device_SetViewport_VMT_Index] = ReversibleHooks::Utility::FunctionToVoidPtr(&Proxy_SetViewport);
     }
 };
 

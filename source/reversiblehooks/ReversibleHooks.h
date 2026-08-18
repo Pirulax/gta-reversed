@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
-#include "HookSystem.h"
+
 #include "VMTInfo.h"
 #include "HooksUtility.hpp"
 #include "RHManager.h"
