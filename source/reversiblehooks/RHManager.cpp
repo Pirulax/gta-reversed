@@ -11,39 +11,11 @@
 static constexpr auto HOOKS_CHECK_INTERVAL = std::chrono::milliseconds{ 500 };
 
 namespace ReversibleHooks {
-auto RHManager::SetCategoryOrItemStateByPath(std::string_view path, bool enabled) -> SetCatOrItemStateResult {
-    if (path.ends_with("/")) {
-        path.remove_suffix(1);
-    }
-    NOTSA_UNREACHABLE("TODO");
-    
-    //const auto    separated = SplitStringView(path, "/") | rng::to<std::vector>();
-    //HookCategory* cat       = &GetRootCategory();
-    //for (auto name : std::span(separated).first(separated.size() - 1)) {
-    //    cat = cat->FindSubcategory(name);
-    //    if (!cat) {
-    //        return SetCatOrItemStateResult::NotFound;
-    //    }
-    //}
-    //
-    //if (auto category = cat->FindSubcategory(separated.back())) {
-    //    category->SetAllItemsState(enabled);
-    //    return SetCatOrItemStateResult::Done;
-    //} else if (auto item = cat->FindItem(separated.back())) {
-    //    if (item->GetState() == enabled) {
-    //        return SetCatOrItemStateResult::Done;
-    //    }
-    //    return item->SetState(enabled) ? SetCatOrItemStateResult::Done : SetCatOrItemStateResult::Locked;
-    //}
-    //
-    //return SetCatOrItemStateResult::NotFound;
-}
-
 void RHManager::CheckAll() {
     if (const auto now = HooksCheckClock::now(); now - m_LastHooksCheckTime > HOOKS_CHECK_INTERVAL) {
         m_LastHooksCheckTime = now;
-        m_RootHookCategory->ForEachItem([](HookCategoryItem& item) {
-            item.GetHook()->Check();
+        m_RootHookCategory->ForEachItem([](const auto item) {
+            item->GetHook()->Check();
         });
     }
 }

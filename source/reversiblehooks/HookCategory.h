@@ -85,13 +85,13 @@ public:
         return cat;
     }
 
-    //! Iterates over all items, including those in all subcategories
-    //! NOTE: Make sure the function doesn't add/remove items/subcategories!
-    //!       (Underlaying storages are vectors, which don't like being modifies while they're being iterated over)
-    template<typename Fn>
-    void ForEachItem(Fn&& fn) {
-        for (const auto item : m_Items) {
-            std::invoke(fn, *item);
+    /*!
+     * @brief Recursively iterate over all items in this category and all subcategories
+     * @note Make sure the function doesn't add/remove items/subcategories, we don't want iterators being invalidated.
+     */
+    void ForEachItem(std::invocable<std::shared_ptr<HookCategoryItem>> auto&& fn) {
+        for (auto item : m_Items) {
+            std::invoke(fn, std::move(item));
         }
         for (const auto cat : m_SubCategories) {
             cat->ForEachItem(fn);
@@ -100,12 +100,10 @@ public:
 
     /*!
     * @brief Iterate over all sub-categories recursively
-    *
-    * @param fn A functor taking a `HookCategory&` as it's first argument
+    * @note Make sure the function doesn't add/remove items/subcategories, we don't want iterators being invalidated.
     */
-    template<typename Fn>
-    void ForEachCategory(Fn&& fn) {
-        std::invoke(fn, *this);
+    void ForEachCategory(std::invocable<std::shared_ptr<HookCategory>> auto&& fn) {
+        std::invoke(fn, shared_from_this());
         for (const auto cat : m_SubCategories) {
             cat->ForEachCategory(fn);
         }

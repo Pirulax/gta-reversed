@@ -25,6 +25,7 @@
 #ifdef NOTSA_STANDALONE
 #include "ReversibleHook/NullHook.h"
 #else
+#include "ReversibleHook/VirtualDestructorHook.h"
 #include "ReversibleHook/StaticTwoWayHook.h"
 #endif
 
@@ -44,14 +45,6 @@ public:
         Locked,
         Done
     };
-
-    /*!
-     * @brief Set the state of a category or item by its path.
-     * @param path Path to the category or item (e.g., "Global/Entity/Ped/SetHealth")
-     * @param enabled
-     * @return 
-     */
-    SetCatOrItemStateResult SetCategoryOrItemStateByPath(std::string_view path, bool enabled);
 
     /*!
     * @brief Run `Check` on all hooks
