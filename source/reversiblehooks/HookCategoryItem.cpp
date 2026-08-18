@@ -1,10 +1,10 @@
 #include "StdInc.h"
 
+#include <Base.h>
+
 #include <cassert>
 #include <filesystem>
 #include <format>
-
-#include <Base.h>
 
 #include "HookCategory.h"
 #include "HookCategoryItem.h"
