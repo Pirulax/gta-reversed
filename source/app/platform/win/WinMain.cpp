@@ -558,7 +558,7 @@ INT WINAPI WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, I
     notsa::ui::UIRenderer::CreateInstance();
     // code..
     notsa::ui::UIRenderer::CreateInstance();
-    NOTSA_LOG_ERROR("This executable is meant to be used for dumping hooks only, see `NOTSA_DUMP_HOOKS_ONLY` option");
+    NOTSA_LOG_ERR("This executable is meant to be used for dumping hooks only, see `NOTSA_DUMP_HOOKS_ONLY` option");
     return 1;
 #endif
 }

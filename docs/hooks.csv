@@ -1828,7 +1828,7 @@ CMenuSystem,SetActiveMenuItem,0x005820C0,1,0,S
 CMenuSystem,SetColumnOrientation,0x00582080,1,0,S
 CMenuSystem,SetColumnWidth,0x00582050,1,0,S
 CMenuSystem,SwitchOffMenu,0x00580750,1,0,S
-CMenuManager,AdditionalOptionInput,0x005773D0,0,1,S
+CMenuManager,AdditionalOptionInput,0x005773D0,1,0,S
 CMenuManager,CentreMousePointer,0x0057C520,1,0,S
 CMenuManager,CheckCodesForControls,0x0057DB20,1,0,S
 CMenuManager,CheckForMenuClosing,0x00576B70,1,1,S

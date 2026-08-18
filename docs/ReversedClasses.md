@@ -1,13 +1,13 @@
 # Reversed Classes progress
 This file is updated automatically every time the hooks.csv file is updated (which happens every time there are changes to hooks made by a commit), and shows the current progress of reversed classes in the project.
 
-Last update was at Jul 30, 2026 at 23:24:19 UTC triggered by [9a44ef97d99cae10f312b3d21e1a591ae6ce8f65](https://github.com/gta-reversed/gta-reversed/commit/9a44ef97d99cae10f312b3d21e1a591ae6ce8f65) 
+Last update was at Aug 15, 2026 at 12:29:44 UTC triggered by [3707559cdbc75bd98b054419fadf3cc24fa4187e](https://github.com/gta-reversed/gta-reversed/commit/3707559cdbc75bd98b054419fadf3cc24fa4187e) 
 
 ## Disclaimer
 The percentages and the number of classes shown here may not be completely accurate, because not all classes and functions are documented yet.
 ## Stats (8014 functions, 701 classes)
 
-#### Completely reversed classes (580/701) [83%]
+#### Completely reversed classes (581/701) [83%]
 
 <details>
 <summary>See list of classes</summary>- cTransmission (4)<br />
@@ -96,6 +96,7 @@ The percentages and the number of classes shown here may not be completely accur
 - CMotionBlurStreaks (4)<br />
 - CMirrors (8)<br />
 - CMessages (28)<br />
+- CMenuManager (61)<br />
 - CLocalisation (18)<br />
 - CLoadingScreen (20)<br />
 - CLoadedCarGroup (8)<br />
@@ -593,7 +594,7 @@ The percentages and the number of classes shown here may not be completely accur
 
 </details>
 
-#### Partially reversed classes (118/701) [17%]
+#### Partially reversed classes (117/701) [17%]
 
 <details>
 <summary>See list of classes</summary>- C_PcSave (4/5) [80%]<br />
@@ -620,7 +621,6 @@ The percentages and the number of classes shown here may not be completely accur
 - CPedDamageResponseCalculator (2/7) [29%]<br />
 - CPathFind (54/56) [96%]<br />
 - CMenuSystem (20/21) [95%]<br />
-- CMenuManager (60/61) [98%]<br />
 - CInterestingEvents (2/7) [29%]<br />
 - CGenericGameStorage (5/19) [26%]<br />
 - CGangWars (32/35) [91%]<br />
