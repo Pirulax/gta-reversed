@@ -1828,7 +1828,7 @@ CMenuSystem,SetActiveMenuItem,0x005820C0,1,0,S
 CMenuSystem,SetColumnOrientation,0x00582080,1,0,S
 CMenuSystem,SetColumnWidth,0x00582050,1,0,S
 CMenuSystem,SwitchOffMenu,0x00580750,1,0,S
-CMenuManager,AdditionalOptionInput,0x005773D0,0,1,S
+CMenuManager,AdditionalOptionInput,0x005773D0,1,0,S
 CMenuManager,CentreMousePointer,0x0057C520,1,0,S
 CMenuManager,CheckCodesForControls,0x0057DB20,1,0,S
 CMenuManager,CheckForMenuClosing,0x00576B70,1,1,S
@@ -2662,7 +2662,7 @@ CCollision,IsStoredPolyStillValidVerticalLine,0x00414D70,1,1,S
 CCollision,IsThisVehicleSittingOnMe,0x004152C0,1,1,S
 CCollision,PointInPoly,0x00415730,1,1,S
 CCollision,PointInTriangle,0x00412700,1,1,S
-CCollision,ProcessColModels,0x004185C0,0,1,S
+CCollision,ProcessColModels,0x004185C0,1,1,S
 CCollision,ProcessDiscCollision,0x00413960,1,1,S
 CCollision,ProcessLineBox,0x00413100,1,1,S
 CCollision,ProcessLineOfSight,0x00417950,1,1,S

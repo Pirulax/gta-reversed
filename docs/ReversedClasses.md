@@ -1,13 +1,13 @@
 # Reversed Classes progress
 This file is updated automatically every time the hooks.csv file is updated (which happens every time there are changes to hooks made by a commit), and shows the current progress of reversed classes in the project.
 
-Last update was at Jul 30, 2026 at 23:24:19 UTC triggered by [9a44ef97d99cae10f312b3d21e1a591ae6ce8f65](https://github.com/gta-reversed/gta-reversed/commit/9a44ef97d99cae10f312b3d21e1a591ae6ce8f65) 
+Last update was at Aug 19, 2026 at 09:13:31 UTC triggered by [7a95a39da90295ba89619679010c0a16c9ce92e5](https://github.com/gta-reversed/gta-reversed/commit/7a95a39da90295ba89619679010c0a16c9ce92e5) 
 
 ## Disclaimer
 The percentages and the number of classes shown here may not be completely accurate, because not all classes and functions are documented yet.
 ## Stats (8014 functions, 701 classes)
 
-#### Completely reversed classes (580/701) [83%]
+#### Completely reversed classes (582/701) [83%]
 
 <details>
 <summary>See list of classes</summary>- cTransmission (4)<br />
@@ -96,6 +96,7 @@ The percentages and the number of classes shown here may not be completely accur
 - CMotionBlurStreaks (4)<br />
 - CMirrors (8)<br />
 - CMessages (28)<br />
+- CMenuManager (61)<br />
 - CLocalisation (18)<br />
 - CLoadingScreen (20)<br />
 - CLoadedCarGroup (8)<br />
@@ -148,6 +149,7 @@ The percentages and the number of classes shown here may not be completely accur
 - CControllerConfigManager (58)<br />
 - CCompressedMatrixNotAligned (2)<br />
 - CColourSet (2)<br />
+- CCollision (59)<br />
 - CClock (9)<br />
 - CCheckpoints (8)<br />
 - CCheckpoint (1)<br />
@@ -593,7 +595,7 @@ The percentages and the number of classes shown here may not be completely accur
 
 </details>
 
-#### Partially reversed classes (118/701) [17%]
+#### Partially reversed classes (116/701) [17%]
 
 <details>
 <summary>See list of classes</summary>- C_PcSave (4/5) [80%]<br />
@@ -620,7 +622,6 @@ The percentages and the number of classes shown here may not be completely accur
 - CPedDamageResponseCalculator (2/7) [29%]<br />
 - CPathFind (54/56) [96%]<br />
 - CMenuSystem (20/21) [95%]<br />
-- CMenuManager (60/61) [98%]<br />
 - CInterestingEvents (2/7) [29%]<br />
 - CGenericGameStorage (5/19) [26%]<br />
 - CGangWars (32/35) [91%]<br />
@@ -629,7 +630,6 @@ The percentages and the number of classes shown here may not be completely accur
 - CEntryExit (10/11) [91%]<br />
 - CEntityScanner (3/4) [75%]<br />
 - CCustomBuildingRenderer (3/7) [43%]<br />
-- CCollision (58/59) [98%]<br />
 - CClouds (20/21) [95%]<br />
 - CClothesBuilder (15/23) [65%]<br />
 - CClothes (10/11) [91%]<br />
