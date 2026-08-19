@@ -59,6 +59,13 @@ typedef uint32    bool32;
 #define UNREACHABLE_INTRINSIC(...) assert(false)
 #endif
 
+namespace notsa {
+/*!
+* @return Return source code's base path
+*/
+fs::path GetSourceCodeBasePath();
+};
+
 // Use the `NOTSA_UNREACHABLE` macro for unreachable code paths.
 // In debug mode it will do a DebugBreak() and print a message to the console,
 // while in release code it'll be optimized away (by using special compiler directives)
@@ -68,11 +75,6 @@ typedef uint32    bool32;
 #include <winuser.h>
 
 namespace notsa {
-/*!
- * @return Return source code's base path
- */
-fs::path GetSourceCodeBasePath();
-
 template<typename... Ts>
 [[noreturn]] static void unreachable(std::string_view method, std::string_view file, unsigned line, std::string userDetails = "<None provided>") {
     const auto mbMsg = std::format(
