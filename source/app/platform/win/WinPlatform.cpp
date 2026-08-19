@@ -151,9 +151,41 @@ DWORD ExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo) {
 
     Section("UNHANDLED EXCEPTION");
 
-    SPDLOG_INFO("Exception Code: {:#010x}", pExceptionInfo->ExceptionRecord->ExceptionCode);
-    SPDLOG_INFO("Exception Flags: {:#010x}", pExceptionInfo->ExceptionRecord->ExceptionFlags);
-    SPDLOG_INFO("Exception Address: {:#010x}", (uintptr_t)pExceptionInfo->ExceptionRecord->ExceptionAddress);
+    // Write minidump
+    SPDLOG_INFO("Writing minidump...");
+    {
+        std::error_code ec{};
+        fs::create_directory("dumps", ec);
+        if (ec && ec.value() != ERROR_ALREADY_EXISTS) {
+            NOTSA_LOG_WARN("Failed to create dumps directory: {}", ec.message());
+        }
+        HANDLE hFile = CreateFileA(
+            std::format("dumps/dump_{:%Y_%m_%d_%H_%M_%S}.dmp", std::chrono::utc_clock::now()).c_str(),
+            GENERIC_WRITE,
+            0,
+            NULL,
+            CREATE_ALWAYS,
+            FILE_ATTRIBUTE_NORMAL,
+            NULL
+        );
+        if (hFile != INVALID_HANDLE_VALUE) {
+            MINIDUMP_EXCEPTION_INFORMATION dumpInfo;
+            dumpInfo.ThreadId          = GetCurrentThreadId();
+            dumpInfo.ExceptionPointers = pExceptionInfo;
+            dumpInfo.ClientPointers    = FALSE;
+            MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithThreadInfo, &dumpInfo, NULL, NULL);
+            CloseHandle(hFile);
+        } else {
+            NOTSA_LOG_WARN("Failed to create minidump file: {}", GetLastError());
+        }
+    }
+    SPDLOG_INFO("Writing minidump done");
+
+    Section("DETAILS");
+
+    SPDLOG_INFO("Code: {:#010x}", pExceptionInfo->ExceptionRecord->ExceptionCode);
+    SPDLOG_INFO("Flags: {:#010x}", pExceptionInfo->ExceptionRecord->ExceptionFlags);
+    SPDLOG_INFO("Address: {:#010x}", (uintptr_t)pExceptionInfo->ExceptionRecord->ExceptionAddress);
 
     Section("PARAMETERS");
     {
@@ -263,30 +295,6 @@ DWORD ExceptionHandler(PEXCEPTION_POINTERS pExceptionInfo) {
     spdlog::apply_all([](auto&& logger) {
         logger->flush();
     });
-
-    // Write minidump
-    {
-        fs::create_directory("/dumps/");
-        HANDLE hFile = CreateFileA(
-            std::format("dumps/dump_{:%Y_%m_%d_%H_%M_%S}.dmp", std::chrono::utc_clock::now()).c_str(),
-            GENERIC_WRITE,
-            0,
-            NULL,
-            CREATE_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL,
-            NULL
-        );
-        if (hFile != INVALID_HANDLE_VALUE) {
-            MINIDUMP_EXCEPTION_INFORMATION dumpInfo;
-            dumpInfo.ThreadId          = GetCurrentThreadId();
-            dumpInfo.ExceptionPointers = pExceptionInfo;
-            dumpInfo.ClientPointers    = FALSE;
-            MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpWithThreadInfo, &dumpInfo, NULL, NULL);
-            CloseHandle(hFile);
-        } else {
-            NOTSA_LOG_WARN("Failed to create minidump file: {}", GetLastError());
-        }
-    }
 
     return EXCEPTION_EXECUTE_HANDLER;
 }

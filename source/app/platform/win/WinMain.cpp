@@ -368,18 +368,18 @@ void MainLoopWithSEH(INT nCmdShow) {
     }
 }
 
-auto SEHWrapper(std::invocable auto&& fn, const char* where) {
+INT WinMainSEHWrapper(std::invocable auto&& fn, const char* where) {
     __try {
         return std::invoke(fn);
     } __except (notsa::Win32::ExceptionHandler(GetExceptionInformation())) {
         NOTSA_LOG_CRIT("Exception in `{}`, exiting...", where);
+        exit(1);
     }
-    return 1;
 }
 
 // 0x748710
 INT WINAPI NOTSA_WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, INT nCmdShow) {
-    return SEHWrapper([&]() -> INT {
+    return WinMainSEHWrapper([&]() -> INT {
         SystemParametersInfo(SPI_SETFOREGROUNDLOCKTIMEOUT, 0u, nullptr, 2);
         if (IsAlreadyRunning()) {
             return false;
@@ -517,7 +517,7 @@ INT WINAPI NOTSA_WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdL
 
 #ifdef NOTSA_STANDALONE
 INT WINAPI WinMain(HINSTANCE instance, HINSTANCE hPrevInstance, LPSTR cmdLine, INT nCmdShow) {
-    return SEHWrapper([&] () -> INT {
+    return WinMainSEHWrapper([&] () -> INT {
         notsa::debug::DisplayConsole();
         CommandLine::Load(__argc, __argv);
         if (CommandLine::s_WaitForDebugger) {
