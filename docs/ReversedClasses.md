@@ -1,13 +1,13 @@
 # Reversed Classes progress
 This file is updated automatically every time the hooks.csv file is updated (which happens every time there are changes to hooks made by a commit), and shows the current progress of reversed classes in the project.
 
-Last update was at Aug 15, 2026 at 12:29:44 UTC triggered by [3707559cdbc75bd98b054419fadf3cc24fa4187e](https://github.com/gta-reversed/gta-reversed/commit/3707559cdbc75bd98b054419fadf3cc24fa4187e) 
+Last update was at Aug 19, 2026 at 09:13:31 UTC triggered by [7a95a39da90295ba89619679010c0a16c9ce92e5](https://github.com/gta-reversed/gta-reversed/commit/7a95a39da90295ba89619679010c0a16c9ce92e5) 
 
 ## Disclaimer
 The percentages and the number of classes shown here may not be completely accurate, because not all classes and functions are documented yet.
 ## Stats (8014 functions, 701 classes)
 
-#### Completely reversed classes (581/701) [83%]
+#### Completely reversed classes (582/701) [83%]
 
 <details>
 <summary>See list of classes</summary>- cTransmission (4)<br />
@@ -149,6 +149,7 @@ The percentages and the number of classes shown here may not be completely accur
 - CControllerConfigManager (58)<br />
 - CCompressedMatrixNotAligned (2)<br />
 - CColourSet (2)<br />
+- CCollision (59)<br />
 - CClock (9)<br />
 - CCheckpoints (8)<br />
 - CCheckpoint (1)<br />
@@ -594,7 +595,7 @@ The percentages and the number of classes shown here may not be completely accur
 
 </details>
 
-#### Partially reversed classes (117/701) [17%]
+#### Partially reversed classes (116/701) [17%]
 
 <details>
 <summary>See list of classes</summary>- C_PcSave (4/5) [80%]<br />
@@ -629,7 +630,6 @@ The percentages and the number of classes shown here may not be completely accur
 - CEntryExit (10/11) [91%]<br />
 - CEntityScanner (3/4) [75%]<br />
 - CCustomBuildingRenderer (3/7) [43%]<br />
-- CCollision (58/59) [98%]<br />
 - CClouds (20/21) [95%]<br />
 - CClothesBuilder (15/23) [65%]<br />
 - CClothes (10/11) [91%]<br />
