@@ -2,11 +2,11 @@
 # Game features
 #--------------------------------------------------------------------
 option(${RE_PROJECT}_WITH_OPENAL "Use OpenAL" OFF)
-option(${RE_PROJECT}_WITH_SDL3 "Use SDL3" OFF)
+option(${RE_PROJECT}_USE_SDL3 "Use SDL3" OFF)
 option(${RE_PROJECT}_STANDALONE "Build standalone executable" OFF)
 option(${RE_PROJECT}_DUMP_HOOKS_ONLY "Dump hooks only" OFF)
 
-if (${RE_PROJECT}_WITH_SDL3)
+if (${RE_PROJECT}_USE_SDL3)
     add_compile_definitions(NOTSA_USE_SDL3)
 endif()
 if (${RE_PROJECT}_STANDALONE)
@@ -212,6 +212,7 @@ target_precompile_headers(${RE_PROJECT_LIB_NAME} PRIVATE StdInc.cpp)
 # Configure build options
 #--------------------------------------------------------------------
 if (${RE_PROJECT}_UNITY_BUILD)
+    message(STATUS "Configuring Unity/Jumbo build")
     set_target_properties(${RE_PROJECT_LIB_NAME}
         PROPERTIES
         UNITY_BUILD TRUE
@@ -227,7 +228,7 @@ endif()
 
 if (${RE_PROJECT}_WITH_SANITIZERS)
     message(STATUS "Configuring sanitizers")
-    # add_sanitizers(${RE_PROJECT_LIB_NAME})
+    add_sanitizers(${RE_PROJECT_LIB_NAME})
 endif()
 
 
