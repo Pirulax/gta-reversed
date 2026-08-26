@@ -2,8 +2,8 @@ name: Setup project via Conan
 description: A workflow to setup (and optionally build) the project using Conan and CMake
 
 inputs:
-  profile:
-    description: "Conan (build) profile to use. [Values: See `conan/profiles` folder]"
+  host_profile:
+    description: "Conan (host) profile to use. [Values: See `conan/profiles` folder]"
     type: string
     required: false
     default: "windows-msvc"
@@ -50,12 +50,12 @@ runs:
     - name: Setup Conan profiles
       shell: bash
       run: |
-          # Name of the profile, this can be anything as long as it doesn't conflict with existing ones
-          CI_PROFILE_NAME="ci_host_profile"
+          # Name of the dynamic host profile (This defines what the target system is)
+          CI_HOST_PROFILE_NAME="ci_host_profile"
 
-          # Generate a dynamic build profile for Conan based on the inputs provided to the action
-          cat << EOF > ./conan/profiles/$CI_PROFILE_NAME
-            include(${{ inputs.profile }}.txt)
+          # Generate a dynamic host profile for Conan based on the inputs provided to the action
+          cat << EOF > ./conan/profiles/$CI_HOST_PROFILE_NAME
+            include(${{ inputs.host_profile }}.txt)
 
             [settings]
             build_type=${{ inputs.conf }}
@@ -66,11 +66,21 @@ runs:
             &:standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
           EOF
 
-          # Install it to the Conan cache
+          # Name of the build profile (This defines what the runner is)
+          CI_BUILD_PROFILE_NAME="ci_build_profile"
+
+          # Generate dynamic build profile for this runner
+          cat << EOF > ./conan/profiles/$CI_BUILD_PROFILE_NAME
+            include(default.txt)
+            include(${{ $RUNNER_OS == 'Windows' && 'windows-msvc' || 'unknown' }}.txt)
+          EOF
+
+          # Install it to the Conan
           conan config install ./conan/
 
-          # Make Conan use the generated profile
-          echo "CONAN_DEFAULT_PROFILE=$CI_PROFILE_NAME" >> $GITHUB_ENV
+          # Make Conan use the generated profiles
+          echo "CONAN_DEFAULT_PROFILE=$CI_HOST_PROFILE_NAME" >> $GITHUB_ENV
+          echo "CONAN_BUILD_PROFILE=$CI_BUILD_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
