@@ -51,7 +51,7 @@ runs:
       shell: bash
       run: |
           # Name of the profile, this can be anything as long as it doesn't conflict with existing ones
-          CI_PROFILE_NAME="ci_build_profile"
+          CI_PROFILE_NAME="ci_host_profile"
 
           # Generate a dynamic build profile for Conan based on the inputs provided to the action
           cat << EOF > ./conan/profiles/$CI_PROFILE_NAME
@@ -70,7 +70,7 @@ runs:
           conan config install ./conan/
 
           # Make Conan use the generated profile
-          echo "CONAN_DEFAULT_BUILD_PROFILE=$CI_PROFILE_NAME" >> $GITHUB_ENV
+          echo "CONAN_DEFAULT_PROFILE=$CI_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
