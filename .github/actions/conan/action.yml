@@ -72,7 +72,7 @@ runs:
           # Generate dynamic build profile for this runner
           cat << EOF > ./conan/profiles/$CI_BUILD_PROFILE_NAME
             include(default.txt)
-            include(${{ $RUNNER_OS == 'Windows' && 'windows-msvc' || 'unknown' }}.txt)
+            include(${{ runner.os == 'Windows' && 'windows-msvc' || 'unknown' }}.txt)
           EOF
 
           # Install it to the Conan
