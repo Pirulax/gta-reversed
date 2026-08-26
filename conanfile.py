@@ -14,7 +14,7 @@ class saRecipe(ConanFile):
     exports_sources = "CMakeLists.txt", "source/*"
 
     tool_requires = (
-        "cmake/[>=4.0.0]", # We need CMake 4 to avoid compatibility issues
+        "cmake/[>=4.2.0]", # We need CMake 4 to avoid compatibility issues
     )
 
     options = {
