@@ -31,10 +31,8 @@ jobs:
             - name: Setup project using Conan
               uses: ./.github/actions/conan
               with:
-                  os: ${{ matrix.os }}
                   arch: ${{ matrix.arch }}
                   conf: ${{ matrix.conf }}
-                  preset: ${{ matrix.preset }}
 
             - name: Initialize MSVC Code Analysis
               uses: microsoft/msvc-code-analysis-action@v0.1.1

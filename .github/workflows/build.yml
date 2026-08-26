@@ -23,23 +23,22 @@ jobs:
                 os: [windows-2025-vs2026]
                 arch: [x86]
                 conf: [Debug, Release]
-                preset: [NoUnity, Unity]
+                unity: [true, false]
         runs-on: ${{ matrix.os }}
         steps:
             - name: Checkout
               uses: actions/checkout@v6
 
-            - name: Setup project using Conan
+            - name: Setup and build project using Conan
               uses: ./.github/actions/conan
               with:
-                  os: ${{ matrix.os }}
                   arch: ${{ matrix.arch }}
                   conf: ${{ matrix.conf }}
-                  preset: ${{ matrix.preset }}
+                  unity_build: ${{ matrix.unity }}
                   build: true
 
             - name: Upload artifacts
               uses: actions/upload-artifact@v7
               with:
-                  name: gta_reversed-${{ matrix.conf }}-${{ matrix.preset }}
+                  name: gta_reversed-${{ matrix.conf }}-${{ matrix.unity && 'Unity' || 'Standard' }}
                   path: bin/${{ matrix.conf }}
