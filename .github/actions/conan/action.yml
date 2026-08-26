@@ -28,6 +28,8 @@ inputs:
 
 runs:
     using: "composite"
+    env:
+        PROFILE_PATH: conan/profiles/${{ inputs.profile }}
     steps:
         - name: Setup Python
           uses: actions/setup-python@v4
@@ -45,7 +47,8 @@ runs:
           run: >
             conan install . 
                 --build=missing
-                --profile conan/profiles/${{ inputs.profile }}
+                --profile:host $PROFILE_PATH
+                --profile:build $PROFILE_PATH
                 -s arch=${{ inputs.arch }}
                 -s build_type=${{ inputs.conf }}
                 -o unity_build=${{ inputs.unity_build }}
@@ -56,7 +59,8 @@ runs:
           shell: bash
           run: >
             conan build .
-                --profile conan/profiles/${{ inputs.profile }}
+                --profile:host $PROFILE_PATH
+                --profile:build $PROFILE_PATH
                 -s arch=${{ inputs.arch }}
                 -s build_type=${{ inputs.conf }}
                 -o unity_build=${{ inputs.unity_build }}
