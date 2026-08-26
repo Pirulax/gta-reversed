@@ -23,7 +23,7 @@ jobs:
         os: [windows-2025-vs2026]
         arch: [x86]
         conf: [Debug, Release]
-        unity: [true, false]
+        unity: [Unity, NoUnity]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -34,11 +34,11 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           conf: ${{ matrix.conf }}
-          unity_build: ${{ matrix.unity }}
+          unity_build: ${{ matrix.unity == 'Unity' && 'true' || 'false' }}
           build: true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: gta_reversed-${{ matrix.conf }}-${{ matrix.unity && 'Unity' || 'Standard' }}
+          name: gta_reversed-${{ matrix.conf }}-${{ matrix.unity }}
           path: bin/${{ matrix.conf }}
