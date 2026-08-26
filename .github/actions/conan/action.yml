@@ -4,27 +4,40 @@ description: A workflow to setup CMake using Conan, which can be used as a depen
 inputs:
   profile:
     description: "Conan profile to use for the build. [Values: See `conan/profiles` folder]"
+    type: string
     required: false
     default: "windows-msvc"
   arch:
     description: "The architecture to use for the setup. [Values: x86]"
+    type: string
     required: true
     default: "x86"
+    options:
+      - x86
   conf:
     description: "The build configuration to use for the setup. [Values: Debug, Release]"
     required: true
+    options:
+      - Debug
+      - Release
   unity_build:
     description: "Enable or disable Unity build. [Values: true, false]"
+    type: boolean
     required: false
-    default: "false"
+    default: false
   standalone:
     description: "Standalone (exe instead of dll) build mode [Values: false, dump_hooks_only]"
+    type: string
     required: false
     default: "false"
+    options:
+      - "false"
+      - "dump_hooks_only"
   build:
     description: "Whether to build the project after setting up CMake and Conan. [Values: true, false]"
+    type: boolean
     required: false
-    default: "false"
+    default: false
 
 runs:
   using: "composite"
@@ -55,8 +68,8 @@ runs:
             arch=${{ inputs.arch }}
 
             [options]
-            unity_build=${{ inputs.unity_build }}
-            standalone=${{ inputs.standalone }}
+            &:unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
+            &:standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
           EOF
 
           # Install it to the Conan cache
