@@ -42,26 +42,33 @@ runs:
         python -m pip install --upgrade pip
         python -m pip install conan
 
+    - name: Setup Conan profiles
+      shell: bash
+      run: |
+          DYNAMIC_PROFILE_PATH="ci_conanprofile.txt"
+
+          # Set env variables for Conan to use the dynamic profile
+          echo "CONAN_DEFAULT_PROFILE=$DYNAMIC_PROFILE_PATH" >> $GITHUB_ENV
+          echo "CONAN_DEFAULT_BUILD_PROFILE=$DYNAMIC_PROFILE_PATH" >> $GITHUB_ENV
+
+          # Generate a dynamic Conan profile based on the inputs provided to the action
+          cat << EOF > $DYNAMIC_PROFILE_PATH
+            [settings]
+            build_type=${{ inputs.conf }}
+            arch=${{ inputs.arch }}
+
+            [options]
+            unity_build=${{ inputs.unity_build }}
+            standalone=${{ inputs.standalone }}
+          EOF
+
     - name: Setup project dependencies via Conan
       shell: bash
       run: >
-        conan install . 
-            --build=missing
-            --profile:host $PROFILE_PATH
-            --profile:build $PROFILE_PATH
-            -s arch=${{ inputs.arch }}
-            -s build_type=${{ inputs.conf }}
-            -o unity_build=${{ inputs.unity_build }}
-            -o standalone=${{ inputs.standalone }}
+        conan install . --build=missing
 
     - name: Setup dependencies and build project using Conan
       if: ${{ inputs.build == 'true' }}
       shell: bash
       run: >
         conan build .
-            --profile:host $PROFILE_PATH
-            --profile:build $PROFILE_PATH
-            -s arch=${{ inputs.arch }}
-            -s build_type=${{ inputs.conf }}
-            -o unity_build=${{ inputs.unity_build }}
-            -o standalone=${{ inputs.standalone }}
