@@ -241,11 +241,7 @@ target_precompile_headers(${RE_PROJECT_LIB_NAME} PRIVATE StdInc.cpp)
 #--------------------------------------------------------------------
 if (${RE_PROJECT}_UNITY_BUILD)
     message(STATUS "Configuring Unity/Jumbo build")
-    # 1. FIX: Turn off module scanning for this specific target
-    set_target_properties(${RE_PROJECT_LIB_NAME} PROPERTIES 
-        CXX_SCAN_FOR_MODULES OFF
-    )
-    add_compile_definitions(${RE_PROJECT_LIB_NAME} NOTSA_UNITY_BUILD)
+    target_compile_definitions(${RE_PROJECT_LIB_NAME} PRIVATE NOTSA_UNITY_BUILD)
     set_target_properties(${RE_PROJECT_LIB_NAME}
         PROPERTIES
         UNITY_BUILD TRUE
@@ -263,7 +259,6 @@ if (${RE_PROJECT}_WITH_SANITIZERS)
     message(STATUS "Configuring sanitizers")
     add_sanitizers(${RE_PROJECT_LIB_NAME})
 endif()
-
 
 #--------------------------------------------------------------------
 # Configure the Audio API
