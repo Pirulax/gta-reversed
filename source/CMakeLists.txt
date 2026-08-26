@@ -140,8 +140,10 @@ add_dependency(
     Vorbis
     imgui
     libjpeg-turbo
-    SDL3
 )
+if (${RE_PROJECT}_USE_SDL3)
+    add_dependency(SDL3)
+endif()
 
 target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
     nlohmann_json::nlohmann_json
@@ -156,9 +158,12 @@ target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
     dxguid
     strmiids
     d3d9
-    SDL3::SDL3
 )
-
+if (${RE_PROJECT}_USE_SDL3)
+    target_link_libraries(${RE_PROJECT_LIB_NAME} PRIVATE
+        SDL3::SDL3
+    )
+endif()
 
 target_include_directories(${RE_PROJECT_LIB_NAME} PRIVATE
     .
