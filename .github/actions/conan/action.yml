@@ -80,7 +80,7 @@ runs:
 
           # Make Conan use the generated profiles
           echo "CONAN_DEFAULT_PROFILE=$CI_HOST_PROFILE_NAME" >> $GITHUB_ENV
-          echo "CONAN_BUILD_PROFILE=$CI_BUILD_PROFILE_NAME" >> $GITHUB_ENV
+          echo "CONAN_DEFAULT_BUILD_PROFILE=$CI_BUILD_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
