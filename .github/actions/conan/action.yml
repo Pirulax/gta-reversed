@@ -2,6 +2,10 @@ name: Setup project via Conan
 description: A workflow to setup CMake using Conan, which can be used as a dependency for other workflows.
 
 inputs:
+    profile:
+        description: "Conan profile to use for the build. [Values: See `conan/profiles` folder]"
+        required: false
+        default: "windows-msvc"
     arch:
         description: "The architecture to use for the setup. [Values: x86]"
         required: true
@@ -41,7 +45,7 @@ runs:
           run: >
             conan install . 
                 --build=missing
-                --profile conanprofile.txt
+                --profile conan/profiles/${{ inputs.profile }}
                 -s arch=${{ inputs.arch }}
                 -s build_type=${{ inputs.conf }}
                 -o unity_build=${{ inputs.unity_build }}
@@ -52,7 +56,7 @@ runs:
           shell: bash
           run: >
             conan build .
-                --profile conanprofile.txt
+                --profile conan/profiles/${{ inputs.profile }}
                 -s arch=${{ inputs.arch }}
                 -s build_type=${{ inputs.conf }}
                 -o unity_build=${{ inputs.unity_build }}

@@ -67,7 +67,6 @@ jobs:
       - name: Setup and build project using Conan
         uses: ./.github/actions/conan
         with:
-          arch: x86
           conf: Debug # Builds faster (and there's functionally no difference in this case)
           unity_build: true # Builds faster
           standalone: dump_hooks_only
