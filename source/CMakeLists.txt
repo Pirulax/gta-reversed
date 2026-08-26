@@ -4,7 +4,7 @@
 option(${RE_PROJECT}_WITH_OPENAL "Use OpenAL" OFF)
 option(${RE_PROJECT}_USE_SDL3 "Use SDL3" OFF)
 option(${RE_PROJECT}_STANDALONE "Build standalone executable" OFF)
-option(${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY "Dump hooks only" OFF)
+option(${RE_PROJECT}_STANDALONE_DUMP_HOOKS_ONLY "Dump hooks only" OFF)
 
 if (${RE_PROJECT}_USE_SDL3)
     add_compile_definitions(NOTSA_USE_SDL3)
@@ -12,11 +12,11 @@ endif()
 if (${RE_PROJECT}_STANDALONE)
     add_compile_definitions(NOTSA_STANDALONE)
 endif()
-if (${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY)
+if (${RE_PROJECT}_STANDALONE_DUMP_HOOKS_ONLY)
     if (NOT ${RE_PROJECT}_STANDALONE)
-        message(FATAL_ERROR "${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY requires ${RE_PROJECT}_STANDALONE=ON")
+        message(FATAL_ERROR "${RE_PROJECT}_STANDALONE_DUMP_HOOKS_ONLY requires ${RE_PROJECT}_STANDALONE=ON")
     endif()
-    add_compile_definitions(NOTSA_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY)
+    add_compile_definitions(NOTSA_STANDALONE_DUMP_HOOKS_ONLY)
 endif()
 
 #--------------------------------------------------------------------
@@ -32,22 +32,27 @@ if(${RE_PROJECT}_WITH_SCRIPT_COMMAND_HOOKS)
     add_compile_definitions(NOTSA_WITH_SCRIPT_COMMAND_HOOKS)
 endif()
 
+if (NOT WIN32 AND NOT ${RE_PROJECT}_WITH_OPENAL)
+    set(${RE_PROJECT}_WITH_OPENAL ON)
+endif()
+
+#--------------------------------------------------------------------
+# Gathher source files, and create the target
+#--------------------------------------------------------------------
+
+#
+# Regular source files
+# Module scanning is disabled for these, so we can unity build
+# If any of them contain module imports the compiler should error out
+#
 file(
-    GLOB_RECURSE SOURCE_FILES_LIST
+    GLOB_RECURSE SOURCE_FILES_WITHOUT_MODULES_LIST
     LIST_DIRECTORIES false
     RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.h*"
     "${CMAKE_CURRENT_SOURCE_DIR}/*.c*"
 )
-list(APPEND SOURCE_FILES_LIST StdInc.cpp)
-
-#--------------------------------------------------------------------
-# Remove unused sources
-#--------------------------------------------------------------------
-if (NOT WIN32 AND NOT ${RE_PROJECT}_WITH_OPENAL)
-    set(${RE_PROJECT}_WITH_OPENAL ON)
-endif()
-
+list(APPEND SOURCE_FILES_WITHOUT_MODULES_LIST StdInc.cpp)
 if (${RE_PROJECT}_WITH_OPENAL)
     # TODO: Remove dsound specific sources
 else()
@@ -58,14 +63,36 @@ else()
         "${CMAKE_CURRENT_SOURCE_DIR}/game_sa/Audio/OpenAL/*.c*"
         "${CMAKE_CURRENT_SOURCE_DIR}/game_sa/Audio/OpenAL/*.h*"
     )
-    list(REMOVE_ITEM SOURCE_FILES_LIST ${OPENAL_FILES})
+    list(REMOVE_ITEM SOURCE_FILES_WITHOUT_MODULES_LIST ${OPENAL_FILES})
 endif()
+set_source_files_properties(${SOURCE_FILES_WITHOUT_MODULES_LIST} PROPERTIES CXX_SCAN_FOR_MODULES OFF)
+
+#
+# Source files that should be scanned for modules
+#
+set(SOURCE_FILES_WITH_MODULES_LIST) # Empty for now, we dont use modules yet
+set_source_files_properties(${SOURCE_FILES_WITH_MODULES_LIST} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+
+#
+# Module source files
+#
+file(
+    GLOB_RECURSE CXX_MODULE_FILES_LIST
+    LIST_DIRECTORIES false
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.ixx"
+)
 
 if (${RE_PROJECT}_STANDALONE)
-    add_executable(${RE_PROJECT_LIB_NAME} WIN32 ${SOURCE_FILES_LIST})
+    add_executable(${RE_PROJECT_LIB_NAME} WIN32)
 else()
-    add_library(${RE_PROJECT_LIB_NAME} MODULE ${SOURCE_FILES_LIST})
+    add_library(${RE_PROJECT_LIB_NAME} MODULE)
 endif()
+target_sources(${RE_PROJECT_LIB_NAME} 
+    PRIVATE ${SOURCE_FILES_WITHOUT_MODULES_LIST}
+    PRIVATE ${SOURCE_FILES_WITH_MODULES_LIST}
+    PRIVATE FILE_SET cxx_modules TYPE CXX_MODULES FILES ${CXX_MODULE_FILES_LIST}
+)
 target_link_options(${RE_PROJECT_LIB_NAME} PRIVATE
     "$<$<CXX_COMPILER_ID:MSVC>:/INCREMENTAL>"
 )
@@ -214,6 +241,11 @@ target_precompile_headers(${RE_PROJECT_LIB_NAME} PRIVATE StdInc.cpp)
 #--------------------------------------------------------------------
 if (${RE_PROJECT}_UNITY_BUILD)
     message(STATUS "Configuring Unity/Jumbo build")
+    # 1. FIX: Turn off module scanning for this specific target
+    set_target_properties(${RE_PROJECT_LIB_NAME} PROPERTIES 
+        CXX_SCAN_FOR_MODULES OFF
+    )
+    add_compile_definitions(${RE_PROJECT_LIB_NAME} NOTSA_UNITY_BUILD)
     set_target_properties(${RE_PROJECT_LIB_NAME}
         PROPERTIES
         UNITY_BUILD TRUE
