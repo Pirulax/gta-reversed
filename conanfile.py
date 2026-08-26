@@ -28,7 +28,7 @@ class saRecipe(ConanFile):
         "unity_build": [True, False],
 
         # Standalone build mode
-        "standalone": [False, 'dump_hooks_only'], 
+        "standalone": [False, 'dump_hooks_only'], # There's no `True` yet, as we can't build a fully standalone version yet
     }
 
     default_options = {
