@@ -47,7 +47,7 @@ runs:
           DYNAMIC_PROFILE_NAME="action_dynamic"
 
           # Generate a dynamic Conan profile based on the inputs provided to the action
-          cat << EOF > ./conan/profiles/$DYNAMIC_PROFILE_NAME.txt
+          cat << EOF > ./conan/profiles/$DYNAMIC_PROFILE_NAME
             include(${{ inputs.profile }})
 
             [settings]
