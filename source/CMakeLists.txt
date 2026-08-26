@@ -37,7 +37,7 @@ if (NOT WIN32 AND NOT ${RE_PROJECT}_WITH_OPENAL)
 endif()
 
 #--------------------------------------------------------------------
-# Gathher source files, and create the target
+# Gather source files, and create the target
 #--------------------------------------------------------------------
 
 #
@@ -88,11 +88,13 @@ if (${RE_PROJECT}_STANDALONE)
 else()
     add_library(${RE_PROJECT_LIB_NAME} MODULE)
 endif()
-target_sources(${RE_PROJECT_LIB_NAME} 
-    PRIVATE ${SOURCE_FILES_WITHOUT_MODULES_LIST}
-    PRIVATE ${SOURCE_FILES_WITH_MODULES_LIST}
-    PRIVATE FILE_SET cxx_modules TYPE CXX_MODULES FILES ${CXX_MODULE_FILES_LIST}
-)
+if (CXX_MODULE_FILES_LIST)
+    target_sources(${RE_PROJECT_LIB_NAME} PRIVATE FILE_SET cxx_modules TYPE CXX_MODULES FILES ${CXX_MODULE_FILES_LIST})
+endif()
+if (SOURCE_FILES_WITH_MODULES_LIST)
+    target_sources(${RE_PROJECT_LIB_NAME} PRIVATE FILE_SET cxx_modules TYPE CXX_MODULES FILES ${SOURCE_FILES_WITH_MODULES_LIST})
+endif()
+target_sources(${RE_PROJECT_LIB_NAME} PRIVATE ${SOURCE_FILES_WITHOUT_MODULES_LIST})
 target_link_options(${RE_PROJECT_LIB_NAME} PRIVATE
     "$<$<CXX_COMPILER_ID:MSVC>:/INCREMENTAL>"
 )
