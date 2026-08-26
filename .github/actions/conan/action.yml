@@ -1,9 +1,9 @@
 name: Setup project via Conan
-description: A workflow to setup CMake using Conan, which can be used as a dependency for other workflows.
+description: A workflow to setup (and optionally build) the project using Conan and CMake
 
 inputs:
   profile:
-    description: "Conan profile to use for the build. [Values: See `conan/profiles` folder]"
+    description: "Conan (build) profile to use. [Values: See `conan/profiles` folder]"
     type: string
     required: false
     default: "windows-msvc"
@@ -42,25 +42,19 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Python
-      uses: actions/setup-python@v4
+    - name: Install Conan
+      uses: conan-io/setup-conan@v1
       with:
-        python-version: "3.x"
-
-    - name: Install Conan via Python
-      shell: bash
-      run: |
-        python -m pip install --upgrade pip
-        python -m pip install conan
+        profile_detect: true
 
     - name: Setup Conan profiles
       shell: bash
       run: |
           # Name of the profile, this can be anything as long as it doesn't conflict with existing ones
-          DYNAMIC_PROFILE_NAME="action_dynamic"
+          CI_PROFILE_NAME="ci_build_profile"
 
-          # Generate a dynamic Conan profile based on the inputs provided to the action
-          cat << EOF > ./conan/profiles/$DYNAMIC_PROFILE_NAME
+          # Generate a dynamic build profile for Conan based on the inputs provided to the action
+          cat << EOF > ./conan/profiles/$CI_PROFILE_NAME
             include(${{ inputs.profile }}.txt)
 
             [settings]
@@ -75,9 +69,8 @@ runs:
           # Install it to the Conan cache
           conan config install ./conan/
 
-          # Make Conan use the dynamic profile
-          echo "CONAN_DEFAULT_PROFILE=$DYNAMIC_PROFILE_NAME" >> $GITHUB_ENV
-          echo "CONAN_DEFAULT_BUILD_PROFILE=$DYNAMIC_PROFILE_NAME" >> $GITHUB_ENV
+          # Make Conan use the generated profile
+          echo "CONAN_DEFAULT_BUILD_PROFILE=$CI_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
