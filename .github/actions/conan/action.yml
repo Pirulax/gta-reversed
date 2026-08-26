@@ -43,14 +43,13 @@ runs:
     - name: Setup Conan profiles
       shell: bash
       run: |
-          DYNAMIC_PROFILE_PATH="./ci_conanprofile.txt"
-
-          # Set env variables for Conan to use the dynamic profile
-          echo "CONAN_DEFAULT_PROFILE=$DYNAMIC_PROFILE_PATH" >> $GITHUB_ENV
-          echo "CONAN_DEFAULT_BUILD_PROFILE=$DYNAMIC_PROFILE_PATH" >> $GITHUB_ENV
+          # Name of the profile, this can be anything as long as it doesn't conflict with existing ones
+          DYNAMIC_PROFILE_NAME="action_dynamic"
 
           # Generate a dynamic Conan profile based on the inputs provided to the action
-          cat << EOF > $DYNAMIC_PROFILE_PATH
+          cat << EOF > ./conan/profiles/$DYNAMIC_PROFILE_NAME.txt
+            include(${{ inputs.profile }})
+
             [settings]
             build_type=${{ inputs.conf }}
             arch=${{ inputs.arch }}
@@ -59,6 +58,13 @@ runs:
             unity_build=${{ inputs.unity_build }}
             standalone=${{ inputs.standalone }}
           EOF
+
+          # Install it to the Conan cache
+          conan config install ./conan/profiles
+
+          # Make Conan use the dynamic profile
+          echo "CONAN_DEFAULT_PROFILE=$DYNAMIC_PROFILE_NAME" >> $GITHUB_ENV
+          echo "CONAN_DEFAULT_BUILD_PROFILE=$DYNAMIC_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
