@@ -60,7 +60,7 @@ runs:
           EOF
 
           # Install it to the Conan cache
-          conan config install ./conan/profiles
+          conan config install ./conan/
 
           # Make Conan use the dynamic profile
           echo "CONAN_DEFAULT_PROFILE=$DYNAMIC_PROFILE_NAME" >> $GITHUB_ENV
