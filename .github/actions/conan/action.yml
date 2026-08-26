@@ -47,7 +47,7 @@ runs:
                 -o unity_build=${{ inputs.unity_build }}
                 -o standalone=${{ inputs.standalone }}
 
-        - name: Build project
+        - name: Setup dependencies and build project using Conan
           if: ${{ inputs.build == 'true' }}
           shell: bash
           run: >

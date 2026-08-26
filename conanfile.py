@@ -63,13 +63,11 @@ class saRecipe(ConanFile):
         
         tc = CMakeToolchain(self) 
         tc.user_presets_path = 'ConanPresets.json'
-        def set_var(name, value: bool):
-            tc.cache_variables[name] = "ON" if value else "OFF"
-        set_var("GTASA_STANDALONE_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY", self.options.standalone == 'dump_hooks_only')
-        set_var("GTASA_STANDALONE", self.options.standalone != False)
-        set_var("GTASA_WITH_SCRIPT_COMMAND_HOOKS", self.options.with_script_command_hooks)
-        set_var("GTASA_USE_SDL3", self.options.use_sdl3)
-        set_var("GTASA_UNITY_BUILD", self.options.unity_build)
+        tc.cache_variables["GTASA_STANDALONE_DUMP_HOOKS_ONLY"] = self.options.standalone == 'dump_hooks_only'
+        tc.cache_variables["GTASA_STANDALONE"] = bool(self.options.standalone) is False
+        tc.cache_variables["GTASA_WITH_SCRIPT_COMMAND_HOOKS"] = self.options.with_script_command_hooks
+        tc.cache_variables["GTASA_USE_SDL3"] = self.options.use_sdl3
+        tc.cache_variables["GTASA_UNITY_BUILD"] = self.options.unity_build
         tc.generate()
 
         # Copy ImGui bindings, and misc stuff
