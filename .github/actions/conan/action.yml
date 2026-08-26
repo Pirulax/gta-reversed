@@ -29,7 +29,7 @@ inputs:
 runs:
   using: "composite"
   env:
-    PROFILE_PATH: conan/profiles/${{ inputs.profile }}
+    PROFILE_PATH: conan/profiles/${{ inputs.profile }}.txt
   steps:
     - name: Setup Python
       uses: actions/setup-python@v4
