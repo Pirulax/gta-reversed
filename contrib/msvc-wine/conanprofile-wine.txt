@@ -1,4 +1,4 @@
-include(../../conan/profiles/msvc-windows)
+include(../../conan/profiles/msvc-windows.txt)
 
 [options]
 # Disable libusb in SDL3 — it uses MSBuild (.vcxproj) which we don't have
