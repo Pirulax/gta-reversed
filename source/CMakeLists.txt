@@ -4,7 +4,7 @@
 option(${RE_PROJECT}_WITH_OPENAL "Use OpenAL" OFF)
 option(${RE_PROJECT}_USE_SDL3 "Use SDL3" OFF)
 option(${RE_PROJECT}_STANDALONE "Build standalone executable" OFF)
-option(${RE_PROJECT}_DUMP_HOOKS_ONLY "Dump hooks only" OFF)
+option(${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY "Dump hooks only" OFF)
 
 if (${RE_PROJECT}_USE_SDL3)
     add_compile_definitions(NOTSA_USE_SDL3)
@@ -12,11 +12,11 @@ endif()
 if (${RE_PROJECT}_STANDALONE)
     add_compile_definitions(NOTSA_STANDALONE)
 endif()
-if (${RE_PROJECT}_DUMP_HOOKS_ONLY)
+if (${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY)
     if (NOT ${RE_PROJECT}_STANDALONE)
-        message(FATAL_ERROR "${RE_PROJECT}_DUMP_HOOKS_ONLY requires ${RE_PROJECT}_STANDALONE=ON")
+        message(FATAL_ERROR "${RE_PROJECT}_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY requires ${RE_PROJECT}_STANDALONE=ON")
     endif()
-    add_compile_definitions(NOTSA_DUMP_HOOKS_ONLY)
+    add_compile_definitions(NOTSA_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY)
 endif()
 
 #--------------------------------------------------------------------
@@ -96,6 +96,7 @@ macro(add_dependency)
     foreach (target ${ARGV})
         find_package(${target} REQUIRED)
 
+        # Disable warnings of dependencies
         add_compile_options(${target} PRIVATE
             "$<$<CXX_COMPILER_ID:MSVC>:-w>"
             "$<$<OR:$<CXX_COMPILER_ID:Clang,GCC>,$<CXX_COMPILER_ID:GNU>>:-Wno-everything>"
@@ -215,7 +216,7 @@ if (${RE_PROJECT}_UNITY_BUILD)
     message(STATUS "Configuring Unity/Jumbo build")
     set_target_properties(${RE_PROJECT_LIB_NAME}
         PROPERTIES
-        UNITY_BUILD TRUE
+        UNITY_BUILD ON
         UNITY_BUILD_MODE BATCH
         UNITY_BUILD_BATCH_SIZE 16
     )

@@ -17,6 +17,10 @@ inputs:
         description: "Standalone (exe instead of dll) build mode [Values: false, dump_hooks_only]"
         required: false
         default: "false"
+    build:
+        description: "Whether to build the project after setting up CMake and Conan. [Values: true, false]"
+        required: false
+        default: "false"
 
 runs:
     using: "composite"
@@ -32,11 +36,23 @@ runs:
               python -m pip install --upgrade pip
               python -m pip install conan
 
-        - name: Setup dependencies via Conan
+        - name: Setup project dependencies via Conan
           shell: bash
           run: >
             conan install . 
                 --build=missing
+                --profile conanprofile.txt
+                -s arch=${{ inputs.arch }}
+                -s build_type=${{ inputs.conf }}
+                -o unity_build=${{ inputs.unity_build }}
+                -o standalone=${{ inputs.standalone }}
+
+        - name: Build project
+          if: ${{ inputs.build == 'true' }}
+          shell: bash
+          run: >
+            conan build .
+                --profile conanprofile.txt
                 -s arch=${{ inputs.arch }}
                 -s build_type=${{ inputs.conf }}
                 -o unity_build=${{ inputs.unity_build }}

@@ -3,7 +3,7 @@
 import os, shutil
 
 from conan import ConanFile
-from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
+from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeConfigDeps
 from conan.tools.files import copy
 
 class saRecipe(ConanFile):
@@ -58,14 +58,14 @@ class saRecipe(ConanFile):
         cmake_layout(self)
     
     def generate(self):
-        deps = CMakeDeps(self)
+        deps = CMakeConfigDeps(self)
         deps.generate()
         
         tc = CMakeToolchain(self) 
         tc.user_presets_path = 'ConanPresets.json'
         def set_var(name, value: bool):
             tc.cache_variables[name] = "ON" if value else "OFF"
-        set_var("GTASA_STANDALONE_DUMP_HOOKS_ONLY", self.options.standalone == 'dump_hooks_only')
+        set_var("GTASA_STANDALONE_STANDALONE_STANDALONE_DUMP_HOOKS_ONLY", self.options.standalone == 'dump_hooks_only')
         set_var("GTASA_STANDALONE", self.options.standalone != False)
         set_var("GTASA_WITH_SCRIPT_COMMAND_HOOKS", self.options.with_script_command_hooks)
         set_var("GTASA_USE_SDL3", self.options.use_sdl3)
