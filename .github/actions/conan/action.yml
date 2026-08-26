@@ -47,6 +47,9 @@ runs:
       with:
         profile_detect: true
 
+    - name: Add msbuild to PATH
+      uses: microsoft/setup-msbuild@v3
+
     - name: Setup Conan profiles
       shell: bash
       run: |
@@ -69,18 +72,11 @@ runs:
           # Name of the build profile (This defines what the runner is)
           CI_BUILD_PROFILE_NAME="ci_build_profile"
 
-          # Generate dynamic build profile for this runner
-          cat << EOF > ./conan/profiles/$CI_BUILD_PROFILE_NAME
-            include(default)
-            include(${{ runner.os == 'Windows' && 'windows-msvc' || 'unknown' }}.txt)
-          EOF
-
           # Install it to the Conan
           conan config install ./conan/
 
           # Make Conan use the generated profiles
           echo "CONAN_DEFAULT_PROFILE=$CI_HOST_PROFILE_NAME" >> $GITHUB_ENV
-          echo "CONAN_DEFAULT_BUILD_PROFILE=$CI_BUILD_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
