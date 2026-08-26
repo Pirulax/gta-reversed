@@ -1,4 +1,4 @@
-name: Setup CMake using Conan
+name: Setup project via Conan
 description: A workflow to setup CMake using Conan, which can be used as a dependency for other workflows.
 
 inputs:

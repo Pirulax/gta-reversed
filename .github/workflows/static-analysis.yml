@@ -28,8 +28,8 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v6
 
-            - name: Setup CMake using Conan
-              uses: ./.github/actions/setup-cmake
+            - name: Setup project using Conan
+              uses: ./.github/actions/conan
               with:
                   os: ${{ matrix.os }}
                   arch: ${{ matrix.arch }}

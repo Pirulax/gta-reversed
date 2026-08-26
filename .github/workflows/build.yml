@@ -29,17 +29,14 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v6
 
-            - name: Setup CMake using Conan
-              uses: ./.github/actions/setup-cmake
+            - name: Setup project using Conan
+              uses: ./.github/actions/conan
               with:
                   os: ${{ matrix.os }}
                   arch: ${{ matrix.arch }}
                   conf: ${{ matrix.conf }}
                   preset: ${{ matrix.preset }}
-
-            - name: Build
-              shell: cmd
-              run: cmake --build build --config ${{ matrix.conf }}
+                  build: true
 
             - name: Upload artifacts
               uses: actions/upload-artifact@v7

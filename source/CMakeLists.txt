@@ -216,7 +216,7 @@ if (${RE_PROJECT}_UNITY_BUILD)
     message(STATUS "Configuring Unity/Jumbo build")
     set_target_properties(${RE_PROJECT_LIB_NAME}
         PROPERTIES
-        UNITY_BUILD ON
+        UNITY_BUILD TRUE
         UNITY_BUILD_MODE BATCH
         UNITY_BUILD_BATCH_SIZE 16
     )
