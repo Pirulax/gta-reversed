@@ -48,6 +48,7 @@ runs:
         profile_detect: true
 
     - name: Check CMake version
+      shell: bash
       run: cmake --version
 
     - name: Setup Conan profiles
