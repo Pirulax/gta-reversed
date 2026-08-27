@@ -47,11 +47,10 @@ runs:
       with:
         profile_detect: true
 
-    - name: Set-up CMake compilers
+    - name: Check MSVC version
       shell: bash
       run: |
-        echo "CXX=cl" >> $GITHUB_ENV
-        echo "CC=cl" >> $GITHUB_ENV
+        cl --version
 
     - name: Setup Conan profiles
       shell: bash
