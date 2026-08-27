@@ -76,12 +76,12 @@ runs:
           echo "CONAN_DEFAULT_PROFILE=$CI_HOST_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
-      shell: bash
+      shell: cmd
       run: >
         conan install . ${{ inputs.build && '--build=missing' || '' }}
 
     - name: Setup dependencies and build project using Conan
       if: ${{ inputs.build == 'true' }}
-      shell: bash
+      shell: cmd
       run: >
         conan build .
