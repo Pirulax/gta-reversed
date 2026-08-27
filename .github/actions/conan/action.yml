@@ -42,14 +42,22 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Install Conan
-      uses: conan-io/setup-conan@v1
+    - name: Setup Python
+      uses: actions/setup-python@v4
       with:
-        profile_detect: true
+          python-version: "3.x"
+
+    - name: Install Conan via Python
+      shell: cmd
+      run: |
+          python -m pip install --upgrade pip
+          python -m pip install conan
 
     - name: Setup Conan profiles
       shell: bash
       run: |
+          conan profile detect
+
           # Name of the dynamic host profile (This defines what the target system is)
           CI_HOST_PROFILE_NAME="ci_host_profile"
 
@@ -60,6 +68,10 @@ runs:
             [settings]
             build_type=${{ inputs.conf }}
             arch=${{ inputs.arch }}
+
+            [options]
+            &:unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
+            &:standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
           EOF
 
           # Name of the build profile (This defines what the runner is)
@@ -74,10 +86,10 @@ runs:
     - name: Setup project dependencies via Conan
       shell: bash
       run: >
-        conan install . ${{ inputs.build && '--build=missing' || '' }} -s build_type=${{ inputs.conf }} -s arch=${{ inputs.arch }}
+        conan install . ${{ inputs.build && '--build=missing' || '' }}
 
     - name: Setup dependencies and build project using Conan
       if: ${{ inputs.build == 'true' }}
       shell: bash
       run: >
-        conan build . -s build_type=${{ inputs.conf }} -s arch=${{ inputs.arch }}
+        conan build .
