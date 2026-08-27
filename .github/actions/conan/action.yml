@@ -46,6 +46,7 @@ runs:
       uses: conan-io/setup-conan@v1
       with:
         profile_detect: true
+        cache_packages: true
 
     - name: Setup Conan profiles
       shell: bash
