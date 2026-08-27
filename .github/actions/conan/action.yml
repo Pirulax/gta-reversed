@@ -61,13 +61,6 @@ runs:
           cat << EOF > ./conan/profiles/$CI_HOST_PROFILE_NAME
             include(${{ inputs.host_profile }}.txt)
 
-            [settings]
-            build_type=${{ inputs.conf }}
-            arch=${{ inputs.arch }}
-
-            [options]
-            &:unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
-            &:standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
           EOF
 
           # Name of the build profile (This defines what the runner is)
@@ -82,10 +75,19 @@ runs:
     - name: Setup project dependencies via Conan
       shell: bash
       run: >
-        conan install . ${{ inputs.build == 'true' && '--build=missing' || '' }}
+        conan install . 
+          ${{ inputs.build == 'true' && '--build=missing' || '' }}
+          -o unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
+          -o standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
+          -s build_type=${{ inputs.conf }}
+          -s arch=${{ inputs.arch }}
 
     - name: Setup dependencies and build project using Conan
       if: ${{ inputs.build == 'true' }}
       shell: bash
       run: >
         conan build .
+          -o unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
+          -o standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
+          -s build_type=${{ inputs.conf }}
+          -s arch=${{ inputs.arch }}
