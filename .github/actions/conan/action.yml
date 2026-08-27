@@ -57,7 +57,7 @@ runs:
       run: >
         conan install . 
           ${{ inputs.build == 'true' && '--build=missing' || '' }}
-            
+          --profile ./conan/profiles/${{ inputs.host_profile }}
           -o unity_build=${{ inputs.unity_build == 'true' && 'True' || 'False' }}
           -o standalone=${{ inputs.standalone == 'false' && 'False' || inputs.standalone }}
           -s build_type=${{ inputs.conf }}
