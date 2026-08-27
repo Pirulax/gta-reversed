@@ -4,3 +4,6 @@ compiler=msvc
 compiler.cppstd=23
 compiler.runtime=static
 compiler.version=195
+
+[replace_tool_requires]
+cmake/*: cmake/4.2.0
