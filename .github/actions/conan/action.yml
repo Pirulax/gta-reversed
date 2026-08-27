@@ -51,26 +51,6 @@ runs:
       shell: bash
       run: cmake --version
 
-    - name: Setup Conan profiles
-      shell: bash
-      run: |
-          # Name of the dynamic host profile (This defines what the target system is)
-          CI_HOST_PROFILE_NAME="ci_host_profile"
-
-          # Generate a dynamic host profile for Conan based on the inputs provided to the action
-          cat << EOF > ./conan/profiles/$CI_HOST_PROFILE_NAME
-            include(${{ inputs.host_profile }}.txt)
-
-          EOF
-
-          # Name of the build profile (This defines what the runner is)
-          CI_BUILD_PROFILE_NAME="ci_build_profile"
-
-          # Install it to the Conan
-          conan config install ./conan/
-
-          # Make Conan use the generated profiles
-          echo "CONAN_DEFAULT_PROFILE=$CI_HOST_PROFILE_NAME" >> $GITHUB_ENV
 
     - name: Setup project dependencies via Conan
       shell: bash
