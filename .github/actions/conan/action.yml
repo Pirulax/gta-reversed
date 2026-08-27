@@ -47,11 +47,6 @@ runs:
       with:
         profile_detect: true
 
-    - name: Check MSVC version
-      shell: bash
-      run: |
-        cl --version
-
     - name: Setup Conan profiles
       shell: bash
       run: |
