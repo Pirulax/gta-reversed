@@ -82,7 +82,7 @@ runs:
     - name: Setup project dependencies via Conan
       shell: bash
       run: >
-        conan install . --build=missing
+        conan install . ${{ inputs.build == 'true' && '--build=missing' || '' }}
 
     - name: Setup dependencies and build project using Conan
       if: ${{ inputs.build == 'true' }}
