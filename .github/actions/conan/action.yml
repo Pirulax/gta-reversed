@@ -47,6 +47,12 @@ runs:
       with:
         profile_detect: true
 
+    - name: Set-up CMake compilers
+      shell: bash
+      run: |
+        echo "CXX=cl" >> $GITHUB_ENV
+        echo "CC=cl" >> $GITHUB_ENV
+
     - name: Setup Conan profiles
       shell: bash
       run: |
