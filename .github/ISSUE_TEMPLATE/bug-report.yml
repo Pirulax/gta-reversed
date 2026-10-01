@@ -64,3 +64,19 @@ body:
         Provide a screenshot and/or video demonstrating the issue being experienced.
     validations:
       required: false
+  - type: checkboxes
+    id: ai-usage-checkbox
+    attributes:
+      options:
+        - label: Yes, AI was used
+      label: AI Usage
+      description: |
+        Indicate if AI was used to reproduce or diagnose the issue.
+  - type: textarea
+    id: ai-usage
+    attributes:
+      label: AI Usage
+      description: |
+        If applicable, describe how AI was used to reproduce or diagnose the issue.
+    validations:
+      required: false
