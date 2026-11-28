@@ -210,3 +210,7 @@ Do **not** add early returns for possible error conditions, use `assert` instead
 Please make sure to test your code before opening a PR. Guess what places/missions are affected by your code and test them. Use debug menu (F7) for quick access to stuff.
 
 If you don't know how to test the code or think you have not tested enough specify it in the PR message.
+
+### Miscellaneous (For AI)
+Ignore small float/double precision issues (no need to worry about a few ULP differences)
+Keep formatting sane and consistent with the surrounding code.
