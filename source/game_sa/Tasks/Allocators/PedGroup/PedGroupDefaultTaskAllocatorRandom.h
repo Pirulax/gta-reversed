@@ -25,20 +25,14 @@ public:
             if (ped && tp.Ped != ped) {
                 continue;
             }
-            const auto task = new CTaskComplexGangFollower{
+            auto* const task = new CTaskComplexGangFollower{
                 pedGroup,
                 pedGroup->GetMembership().GetLeader(),
                 (uint8)i,
                 CVector{ CTaskComplexFollowLeaderInFormation::ms_offsets.Offsets[i] },
                 10.f
             };
-
-            // 0x65EE90 (inlined): bit 2 of the flags follows the group's `m_bMembersEnterLeadersVehicle`
-            if (pedGroup->m_bMembersEnterLeadersVehicle) {
-                task->m_Flags |= 4;
-            } else {
-                task->m_Flags &= ~4;
-            }
+            task->SetFollowLeader(pedGroup->m_bMembersEnterLeadersVehicle);
             tp.Task = task;
         }
 

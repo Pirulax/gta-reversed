@@ -38,7 +38,7 @@ CTaskComplexPartnerGreet::CTaskComplexPartnerGreet(const CTaskComplexPartnerGree
 }
 
 void CTaskComplexPartnerGreet::StreamRequiredAnims() {
-    m_requiredAnimsStreamedIn = CAnimManager::StreamAnimBlock(m_animBlockName, CTaskComplexGangLeader::ShouldLoadGangAnims());
+    CAnimManager::StreamAnimBlock(m_animBlockName, CTaskComplexGangLeader::ShouldLoadGangAnims(), m_requiredAnimsStreamedIn);
 }
 
 CTaskComplexSequence* CTaskComplexPartnerGreet::GetPartnerSequence() {

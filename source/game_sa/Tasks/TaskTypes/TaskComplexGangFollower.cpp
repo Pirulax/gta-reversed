@@ -1,14 +1,12 @@
 #include "StdInc.h"
 
 #include "EventPassObject.h"
-
 #include "TaskSimpleRunAnim.h"
 #include "TaskComplexPlayHandSignalAnim.h"
 #include "TaskComplexGangLeader.h"
 #include "TaskSimpleHoldEntity.h"
-#include "IKChainManager_c.h"
+#include <Ragdoll/IKChainManager.h>
 #include "TaskComplexPassObject.h"
-#include "TaskComplexGangLeader.h"
 #include "TaskComplexFollowNodeRoute.h"
 #include "TaskSimpleGoToPoint.h"
 #include "SeekEntity/PosCalculators/EntitySeekPosCalculatorXYOffset.h"
@@ -21,20 +19,6 @@
 #include "TaskComplexTurnToFaceEntityOrCoord.h"
 #include "TaskSimplePause.h"
 
-void CTaskComplexGangFollower::InjectHooks() {
-    RH_ScopedVirtualClass(CTaskComplexGangFollower, 0x86F938, 14);
-    RH_ScopedCategory("Tasks/TaskTypes");
-
-    RH_ScopedInstall(Constructor, 0x65EAA0);
-    RH_ScopedInstall(CalculateOffsetPosition, 0x65ED40);
-    RH_ScopedInstall(Destructor, 0x65EBB0);
-    RH_ScopedVMTInstall(Clone, 0x65ECB0);
-    RH_ScopedVMTInstall(MakeAbortable, 0x65EC30);
-    RH_ScopedVMTInstall(CreateNextSubTask, 0x665E00);
-    RH_ScopedVMTInstall(CreateFirstSubTask, 0x666160);
-    RH_ScopedVMTInstall(ControlSubTask, 0x662A10);
-    //RH_ScopedInstall(CalculateOffsetPosition, 0x65ED40, { .Reversed = false }); // not hooked because i want to keep CVector return, but original function took a CVector&
-}
 
 // 0x65EAA0
 CTaskComplexGangFollower::CTaskComplexGangFollower(CPedGroup* pedGrp, CPed* grpLeader, uint8 grpMembershitIdx, CVector followOffset, float targetRadius) :
@@ -75,11 +59,11 @@ CTaskComplexGangFollower::~CTaskComplexGangFollower() {
 // 0x65ED40
 CVector CTaskComplexGangFollower::CalculateOffsetPosition() {
     if (notsa::contains({ PEDMOVE_WALK, PEDMOVE_RUN, PEDMOVE_SPRINT }, m_Leader->m_nMoveState)) {
-        m_OffsetPos                 = m_Leader->GetMatrix() * CVector{ CTaskComplexFollowLeaderInFormation::ms_offsets.movingOffsets[m_GrpMemIdx] };
+        m_OffsetPos                 = m_Leader->GetMatrix() * CVector{ CTaskComplexFollowLeaderInFormation::ms_offsets.MovingOffsets[m_GrpMemIdx] };
         m_IsUsingStandingStillOffsets = false;
     } else if (!m_IsUsingStandingStillOffsets || (m_Leader->GetPosition() - m_LeaderInitialPos).SquaredMagnitude() >= sq(3.f)) {
         m_LeaderInitialPos          = m_Leader->GetPosition();
-        m_OffsetPos                 = CVector{ CTaskComplexFollowLeaderInFormation::ms_offsets.movingOffsets[m_GrpMemIdx] };
+        m_OffsetPos                 = CVector{ CTaskComplexFollowLeaderInFormation::ms_offsets.MovingOffsets[m_GrpMemIdx] };
         m_IsUsingStandingStillOffsets = true;
     }
     return m_OffsetPos;
@@ -207,7 +191,7 @@ CTask* CTaskComplexGangFollower::ControlSubTask(CPed* ped) {
         return m_pSubTask;
     }
 
-    const auto walkAnim        = RpAnimBlendClumpGetAssociation(ped->m_pRwClump, ANIM_ID_WALK);
+    const auto walkAnim        = RpAnimBlendClumpGetAssociation(ped->GetRpClump(), ANIM_ID_WALK);
     const auto isPedMovingFast = notsa::contains({ PEDMOVE_WALK, PEDMOVE_RUN, PEDMOVE_SPRINT }, ped->GetIntelligence()->GetMoveStateFromGoToTask());
 
     m_OffsetPos = CalculateOffsetPosition();
@@ -256,27 +240,13 @@ CTask* CTaskComplexGangFollower::ControlSubTask(CPed* ped) {
 
     m_AnimsRef = CAnimManager::StreamAnimBlock("gangs", CTaskComplexGangLeader::ShouldLoadGangAnims(), m_AnimsRef);
 
-    //if (m_AnimsRef) { // 0x662E2E
-    //    if (!CTaskComplexGangLeader::ShouldLoadGangAnims()) { // Loaded, but not needed => unload
-    //        CAnimManager::RemoveAnimBlockRef(CAnimManager::GetAnimationBlockIndex("gangs"));
-    //        m_AnimsRef = false;
-    //    }
-    //} else if (CTaskComplexGangLeader::ShouldLoadGangAnims()) { // Anim is not needed anymore
-    //    const auto idx = CAnimManager::GetAnimationBlockIndex("gangs");
-    //    if (CAnimManager::ms_aAnimBlocks[idx].IsLoaded) { // And is loaded, so just add ref
-    //        CAnimManager::AddAnimBlockRef(idx);
-    //    } else { // Not loaded, request it
-    //        CStreaming::RequestModel(IFPToModelId(idx), STREAMING_KEEP_IN_MEMORY);
-    //    }
-    //}
-
     if (!m_PedGroup->m_bIsMissionGroup && !m_IsInPlayersGroup && m_PedGroup->GetMembership().CountMembers() > 3 && CGeneral::RandomBool(1.f / 2000.f * 100.f)) { //> 0x662EA3
         m_LeaveGroup = true;
     }
 
-    if (m_ExhaleTimer.IsStarted() && m_ExhaleTimer.IsOutOfTime() && ped->m_pRwClump) { // 0x662EDD
+    if (m_ExhaleTimer.IsStarted() && m_ExhaleTimer.IsOutOfTime() && ped->GetRpClump()) { // 0x662EDD
         RwV3d pos{ 0.f, 0.1f, 0.f };
-        if (const auto fx = g_fxMan.CreateFxSystem("exhale", pos, RwFrameGetMatrix(RpClumpGetFrame(ped->m_pRwClump)), false)) {
+        if (const auto fx = g_fxMan.CreateFxSystem("exhale", pos, RwFrameGetMatrix(RpClumpGetFrame(ped->GetRpClump())), false)) {
             fx->AttachToBone(ped, BONE_HEAD);
             fx->PlayAndKill();
         }
@@ -317,7 +287,7 @@ CTask* CTaskComplexGangFollower::ControlSubTask(CPed* ped) {
         // 0x66302D
 
         const auto GetPedAnim = [&](AnimationId id) {
-            return RpAnimBlendClumpGetAssociation(ped->m_pRwClump, id);
+            return RpAnimBlendClumpGetAssociation(ped->GetRpClump(), id);
         };
 
         const auto drnkBrAnim = GetPedAnim(ANIM_ID_DRNKBR_PRTL);
@@ -362,13 +332,13 @@ CTask* CTaskComplexGangFollower::ControlSubTask(CPed* ped) {
         }
 
         // 0x6631A6
-        if (pedHeldEntity->GetModelID() == ModelIndices::MI_GANG_DRINK) {
+        if (pedHeldEntity->GetModelId() == ModelIndices::MI_GANG_DRINK) {
             if (CGeneral::RandomBool(50.f)) {
                 ped->Say(CTX_GLOBAL_BOOZE_RECEIVE, 1500);
             } else {
                 passHeldEntityToPed->Say(CTX_GLOBAL_BOOZE_REQUEST);
             }
-        } else if (pedHeldEntity->GetModelID() == ModelIndices::MI_GANG_SMOKE) {
+        } else if (pedHeldEntity->GetModelId() == ModelIndices::MI_GANG_SMOKE) {
             if (CGeneral::RandomBool(50.f)) {
                 ped->Say(CTX_GLOBAL_SPLIFF_RECEIVE, 1500);
             } else {
@@ -410,4 +380,19 @@ CTask* CTaskComplexGangFollower::ControlSubTask(CPed* ped) {
         }
     }
     return m_pSubTask;
+}
+
+void CTaskComplexGangFollower::InjectHooks() {
+    RH_ScopedVirtualClass(CTaskComplexGangFollower, 0x86F938, 14);
+    RH_ScopedCategory("Tasks/TaskTypes");
+
+    RH_ScopedConstructorInstall(0x65EAA0, "0", {}, CPedGroup*, CPed*, uint8, CVector, float);
+    RH_ScopedDestructorInstall(0x65EBB0);
+
+    RH_ScopedVMTInstall(Clone, 0x65ECB0);
+    RH_ScopedVMTInstall(MakeAbortable, 0x65EC30);
+    RH_ScopedVMTInstall(CreateNextSubTask, 0x665E00);
+    RH_ScopedVMTInstall(CreateFirstSubTask, 0x666160);
+    RH_ScopedVMTInstall(ControlSubTask, 0x662A10);
+    //RH_ScopedInstall(CalculateOffsetPosition, 0x65ED40, { .Reversed = false }); // not hooked because i want to keep CVector return, but original function took a CVector&
 }

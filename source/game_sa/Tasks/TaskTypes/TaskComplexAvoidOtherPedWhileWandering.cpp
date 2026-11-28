@@ -113,9 +113,9 @@ CTask* CTaskComplexAvoidOtherPedWhileWandering::ControlSubTask(CPed* ped) {
         return DoQuit();
     }
     
-    if (const auto tGangFollower = notsa::dyn_cast_if_present<CTaskComplexGangFollower>(ped->GetIntelligence()->FindTaskByType(TASK_COMPLEX_GANG_FOLLOWER))) {
-        if (tGangFollower->m_Leader) {
-            m_TargetPt = tGangFollower->m_Leader->GetPosition() + tGangFollower->CalculateOffsetPosition();
+    if (const auto tGangFollower = ped->GetTaskManager().Find<CTaskComplexGangFollower>(false)) {
+        if (tGangFollower->GetLeader()) {
+            m_TargetPt = tGangFollower->GetLeader()->GetPosition() + tGangFollower->CalculateOffsetPosition();
         }
     }
     

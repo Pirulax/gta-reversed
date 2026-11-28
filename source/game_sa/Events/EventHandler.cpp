@@ -2038,10 +2038,10 @@ void CEventHandler::ComputePotentialPedCollideResponse(CEventPotentialWalkIntoPe
                 if (moveState <= PEDMOVE_WALK) {
                     return moveState;
                 }
-                if (!tGangFollower || !tGangFollower->m_Leader) {
+                if (!tGangFollower || !tGangFollower->GetLeader()) {
                     return moveState;
                 }
-                const auto gangLeader = tGangFollower->m_Leader;
+                const auto gangLeader = tGangFollower->GetLeader();
                 const auto leaderMoveState = gangLeader->IsPlayer()
                     ? gangLeader->m_nMoveState
                     : gangLeader->GetIntelligence()->GetMoveStateFromGoToTask();
