@@ -181,12 +181,12 @@ public:
 
     bool MakeAbortable(CPed* ped, eAbortPriority priority = ABORT_PRIORITY_URGENT, const CEvent* event = nullptr) override {
         if (priority == ABORT_PRIORITY_LEISURE) {
-            m_scanInterval = -1;
+            m_seekInterval = -1;
             m_seekTimer.SetAsOutOfTime();
         }
 
         if (m_pSubTask->MakeAbortable(ped, priority, event)) {
-            m_scanTimer.SetAsOutOfTime();
+            m_scanTimer.Start(0);
             return true;
         }
 
@@ -356,7 +356,7 @@ public:
 
         auto& boatPos      = commonBoat->GetPosition();
         auto  pedToBoat    = ped->GetPosition() - boatPos;
-        auto  pedToBoatDir = Normalized(pedToBoat);
+        auto  pedToBoatDir = pedToBoat.Normalized();
 
         auto newPedPos = boatPos - (pedToBoat - pedToBoatDir * 0.25f);
         (void)CPedPlacement::FindZCoorForPed(newPedPos); // Omitting `if` check here, it's useless
@@ -419,15 +419,15 @@ protected: // Wrappers for hooks
     // 0x493730
     CTaskComplexSeekEntity* Constructor(
         CEntity* entity,
-        int32    taskTimer2Interval,
-        int32    taskTimer1Interval,
+        int32    seekInterval,
+        int32    scanInterval,
         float    maxEntityDist2D,
-        float    unk1,
-        float    unk2,
-        bool     flag0,
-        bool     flag1
+        float    moveStateRadius,
+        float    followNodeThresholdHeightChange,
+        bool     bPlayTiredAnim,
+        bool     bFaceEntityWhenDone
     ) {
-        this->CTaskComplexSeekEntity::CTaskComplexSeekEntity(entity, taskTimer1Interval, taskTimer2Interval, maxEntityDist2D, unk1, unk2, flag0, flag1);
+        this->CTaskComplexSeekEntity::CTaskComplexSeekEntity(entity, seekInterval, scanInterval, maxEntityDist2D, moveStateRadius, followNodeThresholdHeightChange, bPlayTiredAnim, bFaceEntityWhenDone);
         return this;
     }
 

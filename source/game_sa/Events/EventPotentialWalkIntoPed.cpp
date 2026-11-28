@@ -37,13 +37,13 @@ bool CEventPotentialWalkIntoPed::AffectsPed(CPed* ped) {
     }
 
     if (const auto task = ped->GetTaskManager().Find<CTaskComplexFollowPedFootsteps>()) {
-        if (task->m_targetPed == m_ped) {
+        if (task->GetTargetPed() == m_ped) {
             return false;
         }
     }
 
     if (const auto task = ped->GetTaskManager().Find<CTaskComplexKillPedOnFoot>()) {
-        if (task->m_target == m_ped) {
+        if (task->m_PedToKill == m_ped) {
             return false;
         }
     }

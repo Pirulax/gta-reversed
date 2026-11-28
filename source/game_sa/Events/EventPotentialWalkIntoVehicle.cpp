@@ -39,10 +39,8 @@ bool CEventPotentialWalkIntoVehicle::AffectsPed(CPed* ped) {
         return false;
 
     if (const auto task = ped->GetTaskManager().Find<CTaskComplexWalkRoundCar>()) {
-        if (task->m_Veh != m_vehicle) {
-            if ((m_vehicle->m_pVehicleBeingTowed && m_vehicle->m_pVehicleBeingTowed == task->m_Veh) ||
-                (m_vehicle->m_pTowingVehicle && m_vehicle->m_pTowingVehicle == task->m_Veh)
-            ) {
+        if (task->GetVehicle() != m_vehicle) {
+            if ((m_vehicle->m_pVehicleBeingTowed && m_vehicle->m_pVehicleBeingTowed == task->GetVehicle()) || (m_vehicle->m_pTowingVehicle && m_vehicle->m_pTowingVehicle == task->GetVehicle())) {
                 task->SetNewVehicle(m_vehicle, 0);
             }
             return false;
@@ -65,8 +63,7 @@ bool CEventPotentialWalkIntoVehicle::AffectsPed(CPed* ped) {
         if (isGoToPointTask || taskEnterCarAsDriver) {
             CVector surfacePoint;
             CPedGeometryAnalyser::ComputeClosestSurfacePoint(*ped, *m_vehicle, surfacePoint);
-            int32 hitSide = CPedGeometryAnalyser::ComputeEntityHitSide(surfacePoint, *m_vehicle);
-            if (hitSide != CPedGeometryAnalyser::ComputeEntityHitSide(targetPos, *m_vehicle))
+            if (CPedGeometryAnalyser::ComputeEntityHitSide(surfacePoint, *m_vehicle) != CPedGeometryAnalyser::ComputeEntityHitSide(targetPos, *m_vehicle))
                 return true;
 
             return false;

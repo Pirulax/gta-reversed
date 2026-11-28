@@ -24,6 +24,9 @@
 #include "Tasks/TaskTypes/TaskComplexSignalAtPed.h"
 #include "Tasks/TaskTypes/TaskComplexPartnerGreet.h"
 #include "Tasks/TaskTypes/TaskComplexPartnerDeal.h"
+#include "Tasks/TaskTypes/TaskSimpleCarDrive.h"
+#include "Tasks/TaskComplexUseSequence.h"
+#include "Tasks/TaskSequences.h"
 
 #include "Tasks/Allocators/TaskAllocator.h"
 #include "Tasks/Allocators/TaskAllocatorPlayerCommandAttack.h"
@@ -47,6 +50,7 @@
 #include "Events/EventNewGangMember.h"
 #include "Events/EventLeaderEntryExit.h"
 #include "Events/EventLeaderExitedCarAsDriver.h"
+#include "Events/EventLeaderEnteredCarAsDriver.h"
 
 void CGroupEventHandler::InjectHooks() {
     RH_ScopedClass(CGroupEventHandler);
@@ -64,8 +68,8 @@ void CGroupEventHandler::InjectHooks() {
     RH_ScopedInstall(ComputeResponsePedFriend, 0x5FB2D0);
     RH_ScopedInstall(ComputeResponseNewGangMember, 0x5F9840);
     RH_ScopedInstall(ComputeResponseLeaderExitedCar, 0x5F90A0);
-    RH_ScopedInstall(ComputeResponsLeaderQuitEnteringCar, 0x5F9530, { .Reversed = false });
-    RH_ScopedInstall(ComputeResponseLeaderEnteredCar, 0x5F8900, { .Reversed = false });
+    RH_ScopedInstall(ComputeResponsLeaderQuitEnteringCar, 0x5F9530);
+    RH_ScopedInstall(ComputeResponseLeaderEnteredCar, 0x5F8900);
     RH_ScopedInstall(ComputeResponseLeaderEnterExit, 0x5F9710);
     RH_ScopedInstall(ComputeResponseGunAimedAt, 0x5FBD10);
     RH_ScopedInstall(ComputeResponseGather, 0x5F99F0);
@@ -181,18 +185,18 @@ CTaskAllocator* CGroupEventHandler::ComputeResponseShotFired(const CEventGunShot
 
 // 0x5FB390
 CTaskAllocator* CGroupEventHandler::ComputeResponseSexyPed(const CEventSexyPed& e, CPedGroup* pg, CPed* originator) {
-    if (!e.m_SexyPed) {
+    if (!e.GetSexyPed()) {
         return nullptr;
     }
-    if (pg->GetMembership().IsMember(e.m_SexyPed)) {
+    if (pg->GetMembership().IsMember(e.GetSexyPed())) {
         return nullptr;
     }
-    if (IsPedInPlayersGroup(pg, e.m_SexyPed)) {
+    if (IsPedInPlayersGroup(pg, e.GetSexyPed())) {
         return nullptr;
     }
     switch (e.m_TaskId) {
-    case TASK_GROUP_STARE_AT_PED:    return ComputeStareResponse(pg, e.m_SexyPed, originator, CGeneral::GetRandomNumberInRange(3000, 5000), 1000);
-    case TASK_GROUP_HASSLE_SEXY_PED: return ComputeHassleSexyPedResponse(pg, e.m_SexyPed, originator);
+    case TASK_GROUP_STARE_AT_PED:    return ComputeStareResponse(pg, e.GetSexyPed(), originator, CGeneral::GetRandomNumberInRange(3000, 5000), 1000);
+    case TASK_GROUP_HASSLE_SEXY_PED: return ComputeHassleSexyPedResponse(pg, e.GetSexyPed(), originator);
     }
     return nullptr;
 }
@@ -355,8 +359,80 @@ CTaskAllocator* CGroupEventHandler::ComputeResponseLeaderExitedCar(const CEventE
 }
 
 // 0x5F8900
-CTaskAllocator* CGroupEventHandler::ComputeResponseLeaderEnteredCar(const CEvent& e, CPedGroup* pg, CPed* originator) {
-    return plugin::CallAndReturn<CTaskAllocator*, 0x5F8900, const CEvent&, CPedGroup*, CPed*>(e, pg, originator);
+CTaskAllocator* CGroupEventHandler::ComputeResponseLeaderEnteredCar(const CEventLeaderEnteredCarAsDriver& e, CPedGroup* pg, CPed* originator) {
+    auto&       grpIntel = pg->GetIntelligence();
+    auto&       pgms     = pg->GetMembership();
+    auto* const leader   = pgms.GetLeader();
+    if (!leader) {
+        return nullptr;
+    }
+    auto* const veh = e.m_vehicle;
+    if (!veh) {
+        return nullptr;
+    }
+
+    // A single follower may take the front seat, unless someone who stays (a member, or a ped that can't be dragged out) sits there
+    const auto CanUseFrontSeat = [&](CPed* m) {
+        if (pgms.CountMembersExcludingLeader() != 1 || veh->IsBike() || veh->IsSubQuad()) {
+            return false;
+        }
+        auto* const frontPassenger = veh->GetPassengers()[0];
+        return !frontPassenger || frontPassenger == m || (!pgms.IsMember(frontPassenger) && !frontPassenger->bDontDragMeOutCar);
+    };
+
+    // Drive along in the car, then go on with the default task
+    const auto SetDriveDefaultTask = [&](CPed* p) {
+        if (p->bHasGroupDriveTask) {
+            return;
+        }
+        p->bHasGroupDriveTask = true;
+        CTaskComplexSequence tSeq{
+            new CTaskSimpleCarDrive{ veh, nullptr, true }
+        };
+        if (auto* const tDefault = grpIntel.GetTaskDefault(p)) {
+            tSeq.AddTask(tDefault->Clone());
+        }
+        grpIntel.SetDefaultTask(p, tSeq);
+    };
+
+    const auto seqId      = grpIntel.GetTaskSeqId();
+    const auto performSeq = e.GetTaskId() == TASK_GROUP_ENTER_CAR_AND_PERFORM_SEQUENCE
+        && seqId >= 0
+        && seqId < CTaskSequences::NUM_SEQUENCES
+        && CTaskSequences::ms_taskSequence[seqId].IsActive();
+
+    CPed* waitFor   = leader;
+    auto  numSeated = 0;
+    for (const auto isMissionPeds : { true, false }) { // Mission peds get the seats first
+        for (auto* const m : pgms.GetFollowers()) {
+            if (m->IsCreatedByMission() != isMissionPeds) {
+                continue;
+            }
+            if (numSeated >= veh->m_nMaxPassengers) { // 0x5F8E8A - No seat left
+                grpIntel.SetEventResponseTask(m, CTaskComplexLeaveAnyCar{ 0, true, false });
+                continue;
+            }
+            if (performSeq) { // 0x5F8A4B
+                grpIntel.SetEventResponseTask(
+                    m,
+                    CTaskComplexSequence{
+                        new CTaskComplexEnterCarAsPassengerWait{ veh, waitFor, CanUseFrontSeat(m), PEDMOVE_RUN },
+                        new CTaskComplexUseSequence{ seqId }
+                }
+                );
+            } else { // 0x5F8BCC
+                grpIntel.SetEventResponseTask(m, CTaskComplexEnterCarAsPassengerWait{ veh, waitFor, CanUseFrontSeat(m), PEDMOVE_RUN });
+                SetDriveDefaultTask(m);
+            }
+            numSeated++;
+            waitFor = m; // Each one waits for the one before
+        }
+    }
+
+    if (!leader->IsPlayer()) { // 0x5F8FA0
+        SetDriveDefaultTask(leader);
+    }
+    return nullptr;
 }
 
 // 0x5F9710
@@ -419,16 +495,16 @@ CTaskAllocator* CGroupEventHandler::ComputeResponseGather(const CEventPlayerComm
 
 // 0x5FBE70
 CTaskAllocator* CGroupEventHandler::ComputeResponseDraggedOutCar(const CEventDraggedOutCar& e, CPedGroup* pg, CPed* originator) {
-    if (!e.m_CarJacker) {
+    if (!e.GetCarJacker()) {
         return nullptr;
     }
-    assert(e.m_CarJacker->GetIsTypePed()); // Original code just `returns nullptr` in this case, but but since `m_CarJacker` is typed as `CPed*` it *should* be at least a `CPed*`
+    assert(e.GetCarJacker()->GetIsTypePed()); // Original code just `returns nullptr` in this case, but but since `m_CarJacker` is typed as `CPed*` it *should* be at least a `CPed*`
     switch (e.m_TaskId) {
     case TASK_GROUP_KILL_THREATS_BASIC:
-        return e.m_CarJacker->IsPlayer() && originator && originator->GetIntelligence()->Respects(e.m_CarJacker) && !pg->m_bIsMissionGroup
-            ? ComputeFleePedResponse(pg, e.m_CarJacker, originator, false)
-            : ComputeKillThreatsBasicResponse(pg, e.m_CarJacker, originator, false);
-    case TASK_GROUP_FLEE_THREAT:         return ComputeFleePedResponse(pg, e.m_CarJacker, originator, false);
+        return e.GetCarJacker()->IsPlayer() && originator && originator->GetIntelligence()->Respects(e.GetCarJacker()) && !pg->m_bIsMissionGroup
+            ? ComputeFleePedResponse(pg, e.GetCarJacker(), originator, false)
+            : ComputeKillThreatsBasicResponse(pg, e.GetCarJacker(), originator, false);
+    case TASK_GROUP_FLEE_THREAT:         return ComputeFleePedResponse(pg, e.GetCarJacker(), originator, false);
     case TASK_GROUP_USE_MEMBER_DECISION: return ComputeMemberResponses(e, pg, originator);
     case TASK_GROUP_EXIT_CAR:            return ComputeResponseLeaderExitedCar(static_cast<const CEventEditableResponse&>(e), pg, originator);
     }
@@ -466,7 +542,24 @@ CTaskAllocator* CGroupEventHandler::ComputeResponseDamage(const CEventDamage& e,
 
 // 0x5F9530
 CTaskAllocator* CGroupEventHandler::ComputeResponsLeaderQuitEnteringCar(const CEvent& e, CPedGroup* pg, CPed* originator) {
-    return plugin::CallAndReturn<CTaskAllocator*, 0x5F9530, const CEvent&, CPedGroup*, CPed*>(e, pg, originator);
+    auto& grpIntel = pg->GetIntelligence();
+    for (auto i = 0; i < TOTAL_PED_GROUP_FOLLOWERS; i++) {
+        auto* const m = pg->GetMembership().GetMember(i);
+        if (!m) {
+            continue;
+        }
+        const auto delay = i * 500;
+        if (m->IsInVehicle()) { // Get out, one after another
+            grpIntel.SetTask(m, CTaskComplexLeaveCar{ m->m_pVehicle, 0, delay, true, false }, grpIntel.GetPedTaskPairs());
+        } else if (auto* const veh = m->GetIntelligence()->GetCarBeingEnteredAsPassenger()) { // Stop getting in
+            grpIntel.SetTask(
+                m,
+                CTaskComplexLeaveCar{ veh, 0, delay + CGeneral::GetRandomNumberInRange(0, 500, true) + 250, false, false },
+                grpIntel.GetPedTaskPairs()
+            );
+        }
+    }
+    return nullptr;
 }
 
 // 0x5FAA50
@@ -558,7 +651,9 @@ CTaskAllocator* CGroupEventHandler::ComputeHassleThreatResponse(CPedGroup* pg, C
         } else {
             SetTask(CTaskGangHasslePed{
                 threat,
-                bBeAggressive ? 2 : 1, // TODO: Enum
+                bBeAggressive
+                    ? CTaskGangHasslePed::eHassleType::ABUSE_AND_ATTACK
+                    : CTaskGangHasslePed::eHassleType::ABUSE,
                 12'000,
                 20'000
             });
@@ -578,7 +673,7 @@ CTaskAllocator* CGroupEventHandler::ComputeHassleSexyPedResponse(CPedGroup* pg, 
         }
         pg->GetIntelligence().SetEventResponseTask(
             m,
-            CTaskGangHasslePed{sexyPed, 0, 8'000, 12'000}
+            CTaskGangHasslePed{sexyPed, CTaskGangHasslePed::eHassleType::EYE, 8'000, 12'000}
         );
     }
     return nullptr;
@@ -747,8 +842,8 @@ CTaskAllocator* CGroupEventHandler::ComputeDrivebyResponse(CPedGroup* pg, CPed* 
 
 // 0x5FC200
 CTaskAllocator* CGroupEventHandler::ComputeEventResponseTasks(const CEventGroupEvent& ge, CPedGroup* g) {
-    const auto& p = ge.m_ped;
-    const auto& e = ge.m_event;
+    auto* const p = ge.GetPed();
+    auto* const e = &ge.GetGroupEvent();
     switch (e->GetEventType()) {
     case EVENT_DRAGGED_OUT_CAR:
         return ComputeResponseDraggedOutCar(static_cast<const CEventDraggedOutCar&>(*e), g, p);
@@ -770,7 +865,7 @@ CTaskAllocator* CGroupEventHandler::ComputeEventResponseTasks(const CEventGroupE
     case EVENT_VEHICLE_DAMAGE_COLLISION:
         return ComputeResponseVehicleDamage(static_cast<const CEventVehicleDamage&>(*e), g, p);
     case EVENT_LEADER_ENTERED_CAR_AS_DRIVER:
-        return ComputeResponseLeaderEnteredCar(*e, g, p);
+        return ComputeResponseLeaderEnteredCar(static_cast<const CEventLeaderEnteredCarAsDriver&>(*e), g, p);
     case EVENT_LEADER_EXITED_CAR_AS_DRIVER:
         return ComputeResponseLeaderExitedCar(static_cast<const CEventLeaderExitedCarAsDriver&>(*e), g, p);
     case EVENT_LEADER_QUIT_ENTERING_CAR_AS_DRIVER:

@@ -90,7 +90,7 @@ void CTheScripts::InjectHooks() {
     // RH_ScopedInstall(DrawDebugCube, 0x0);
     // RH_ScopedInstall(DrawDebugAngledCube, 0x0)
     RH_ScopedInstall(DrawScriptSpritesAndRectangles, 0x464980);
-    RH_ScopedInstall(ScriptDebugCircle2D, 0x485C20, { .Reversed = false });
+    RH_ScopedInstall(ScriptDebugCircle2D, 0x485C20);
     RH_ScopedInstall(DrawScriptSpheres, 0x4810E0);
     RH_ScopedOverloadedInstall(HighlightImportantArea, "", 0x485E00, void(*)(uint32,float,float,float,float,float));
     RH_ScopedInstall(HighlightImportantAngledArea, 0x485EF0);
@@ -665,7 +665,7 @@ void CTheScripts::CleanUpThisPed(CPed* ped) {
 
 // 0x486670
 void CTheScripts::CleanUpThisVehicle(CVehicle* vehicle) {
-    if (!vehicle || vehicle->IsCreatedBy(eVehicleCreatedBy::MISSION_VEHICLE)) {
+    if (!vehicle || !vehicle->IsCreatedBy(eVehicleCreatedBy::MISSION_VEHICLE)) {
         return;
     }
 
@@ -712,11 +712,18 @@ void CTheScripts::ClearSpaceForMissionEntity(const CVector& pos, CEntity* ourEnt
         return;
     }
 
+    // 0x486B6C - Skip peds in vehicles: they're deleted with their vehicle below, so their entries would dangle
+    for (auto& entity : std::span{ colEntities.data(), (size_t)numColliding }) {
+        if (entity != ourEntity && entity->GetIsTypePed() && entity->AsPed()->bInVehicle) {
+            entity = nullptr;
+        }
+    }
+
     // Disable suspension lines of vehicles.
     const auto cdNumLines = std::exchange(ourColData->m_nNumLines, 0);
 
     for (auto& entity : std::span{ colEntities.data(), (size_t)numColliding }) {
-        if (!entity || entity == ourEntity || (entity->GetIsTypePed() && entity->AsPed()->IsInVehicle())) {
+        if (!entity || entity == ourEntity) {
             continue;
         }
 
@@ -758,9 +765,7 @@ void CTheScripts::ClearSpaceForMissionEntity(const CVector& pos, CEntity* ourEnt
             CCarCtrl::RemoveFromInterestingVehicleList(vehicle);
             CWorld::Remove(vehicle);
             delete vehicle;
-        }
-
-        if (entity->GetIsTypePed() && !entity->AsPed()->IsPlayer() && entity->AsPed()->CanBeDeleted()) {
+        } else if (entity->GetIsTypePed() && !entity->AsPed()->IsPlayer() && entity->AsPed()->CanBeDeleted()) {
             CPopulation::RemovePed(entity->AsPed());
         }
     }
@@ -1437,6 +1442,12 @@ void CTheScripts::Process() {
         it->m_LocalVars[SCRIPT_VAR_TIMERA].iParam += timeStepMS;
         it->m_LocalVars[SCRIPT_VAR_TIMERB].iParam += timeStepMS;
         it->Process();
+
+        // NOTE: Like the original (0x46A226): if `it` terminated `next`, `next` is in the idle list now and its `m_pNext` points to
+        //       idle scripts, so we stop here, and the remaining active scripts run in the next frame (See #1636)
+        if (next && !next->m_IsActive) {
+            break;
+        }
     }
 
     CLoadingScreen::NewChunkLoaded();
@@ -1801,10 +1812,7 @@ void CTheScripts::DrawScriptSpritesAndRectangles(bool drawBeforeFade) {
 //   const auto pos = FindPlayerPed()->GetPosition() + CVector{ 0.0f, 0.f, 1.0f };
 //   CTheScripts::ScriptDebugCircle2D(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 100, 50.f, 50.f, HudColour.GetRGB(HUD_COLOUR_RED).ToInt());
 // 0x485C20
-void CTheScripts::ScriptDebugCircle2D(float x, float y, float width, float height, CRGBA color) {
-    return plugin::Call<0x485C20, float, float, float, float, CRGBA>(x, y, width, height, color);
-
-    // untested
+void CTheScripts::ScriptDebugCircle2D(float x, float y, float width, float height, uint32 rgba) {
     RwRenderStateSet(rwRENDERSTATEZWRITEENABLE,      RWRSTATE(TRUE));
     RwRenderStateSet(rwRENDERSTATEZTESTENABLE,       RWRSTATE(FALSE));
     RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, RWRSTATE(TRUE));
@@ -1813,19 +1821,27 @@ void CTheScripts::ScriptDebugCircle2D(float x, float y, float width, float heigh
     RwRenderStateSet(rwRENDERSTATETEXTUREFILTER,     RWRSTATE(rwFILTERLINEAR));
     RwRenderStateSet(rwRENDERSTATETEXTURERASTER,     RWRSTATE(NULL));
 
-    const auto iters = 16;
-    auto part = (CTimer::GetTimeInMS() >> 6) % iters;
-    for (auto i = 0; i < iters; i++) {
-        RwIm2DVertex vertex{
-            .x = std::sin((float)i * PI / 8.0f) * width + x,
-            .y = std::cos((float)i * PI / 8.0f) * height + y
-        };
-        if (part == i)
-            vertex.emissiveColor = (3 * color.g / 4) | (((3 * color.b / 4) | (((3 * color.a / 4) | ((3 * color.r / 4) << 8)) << 8)) << 8); // todo: (3 * color / 4).ToIntARGB();
-        else
-            vertex.emissiveColor = color.ToIntARGB();
-        RwIm2DVertex vertices[2] = { vertex, vertex };
-        RwIm2DRenderLine(vertices, std::size(vertices), 0, 1); // todo: RwIm2DRenderLine_BUGFIX
+    constexpr int32 NUM_SEGMENTS = 16;
+
+    const CRGBA color{ rgba };
+    const auto  highlighted = (int32)((CTimer::GetTimeInMS() >> 6) % NUM_SEGMENTS);
+    const auto  GetPoint    = [&](int32 i) {
+        const auto angle = (float)i * (PI / 8.0f);
+        return CVector2D{ std::sin(angle) * width + x, std::cos(angle) * height + y };
+    };
+    for (auto i = 0; i < NUM_SEGMENTS; i++) {
+        const auto      vertexColor = i == highlighted
+            ? CRGBA{ (uint8)(3 * color.r / 4), (uint8)(3 * color.g / 4), (uint8)(3 * color.b / 4), (uint8)(3 * color.a / 4) }.ToIntARGB()
+            : color.ToIntARGB();
+        const CVector2D p1 = GetPoint(i), p2 = GetPoint(i + 1);
+        RwIm2DVertex    vertices[2]{};
+        vertices[0].x             = p1.x;
+        vertices[0].y             = p1.y;
+        vertices[0].emissiveColor = vertexColor;
+        vertices[1].x             = p2.x;
+        vertices[1].y             = p2.y;
+        vertices[1].emissiveColor = vertexColor;
+        RwIm2DRenderLine(vertices, std::size(vertices), 0, 1);
     }
 
     RwRenderStateSet(rwRENDERSTATEVERTEXALPHAENABLE, RWRSTATE(FALSE));

@@ -556,9 +556,6 @@ bool CAnimManager::IsAnimInBlock(const CAnimBlendHierarchy* h, const CAnimBlock*
 //! @return If the anims are now loaded or not
 bool CAnimManager::StreamAnimBlock(const char* blck, bool shouldBeLoaded, bool isLoaded) {
     if (shouldBeLoaded && !isLoaded) {
-        RemoveAnimBlockRef(GetAnimationBlockIndex(blck));
-        return false;
-    } else if (!shouldBeLoaded && isLoaded) {
         const auto blkIdx = GetAnimationBlockIndex(blck);
         if (GetAnimBlocks()[blkIdx].IsLoaded) {
             AddAnimBlockRef(blkIdx);
@@ -566,6 +563,9 @@ bool CAnimManager::StreamAnimBlock(const char* blck, bool shouldBeLoaded, bool i
         } else {
             CStreaming::RequestModel(IFPToModelId(blkIdx), STREAMING_KEEP_IN_MEMORY);
         }
+    } else if (!shouldBeLoaded && isLoaded) {
+        RemoveAnimBlockRef(GetAnimationBlockIndex(blck));
+        isLoaded = false;
     }
     return isLoaded; // Unchanged
 }
